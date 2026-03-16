@@ -1,0 +1,7 @@
+# Duolingo Engagement Analyzer — Dépendances
+requests>=2.31.0
+pandas>=2.1.0
+python-dotenv>=1.0.0
+google-adk>=1.0.0
+google-api-python-client>=2.160.0
+google-auth>=2.38.0

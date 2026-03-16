@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+daily_streaks_log.csv
+rapports_donnees/*.xlsx
+rapports_donnees/~$*.xlsx

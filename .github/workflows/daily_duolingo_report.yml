@@ -1,0 +1,91 @@
+name: Daily Duolingo Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 * * * *"
+
+concurrency:
+  group: duolingo-daily-report
+  cancel-in-progress: false
+
+jobs:
+  build-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+      DUOLINGO_JWT: ${{ secrets.DUOLINGO_JWT }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+      GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+      GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Gate execution to noon Toronto
+        id: gate
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_now=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          toronto_hour=$(TZ=America/Toronto date +%H)
+          if [ "$toronto_hour" = "12" ]; then
+            echo "run_now=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_now=false" >> "$GITHUB_OUTPUT"
+            echo "Skip: il est ${toronto_hour}h a Toronto."
+          fi
+
+      - name: Set up Python
+        if: steps.gate.outputs.run_now == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run_now == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required secrets
+        if: steps.gate.outputs.run_now == 'true'
+        shell: bash
+        run: |
+          required=(DUOLINGO_JWT GDRIVE_SERVICE_ACCOUNT_JSON GDRIVE_FOLDER_ID)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Le secret ${name} est manquant."
+              exit 1
+            fi
+          done
+
+      - name: Restore historical files from Google Drive
+        if: steps.gate.outputs.run_now == 'true'
+        run: python scripts_utilitaires/google_drive_sync.py pull
+
+      - name: Run daily analysis
+        if: steps.gate.outputs.run_now == 'true'
+        run: python main.py
+
+      - name: Push updated files to Google Drive
+        if: steps.gate.outputs.run_now == 'true'
+        run: python scripts_utilitaires/google_drive_sync.py push
+
+      - name: Upload artifacts
+        if: steps.gate.outputs.run_now == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: duolingo-report-${{ github.run_id }}
+          path: |
+            rapports_donnees/rapport_historique.xlsx
+            daily_streaks_log.csv
