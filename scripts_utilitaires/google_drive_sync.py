@@ -13,11 +13,14 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 BASE_DIR = Path(__file__).resolve().parent.parent
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 FILES_TO_SYNC = {
+    "target_users.csv": BASE_DIR / "target_users.csv",
     "daily_streaks_log.csv": BASE_DIR / "daily_streaks_log.csv",
+    "explored_nodes.json": BASE_DIR / "explored_nodes.json",
     "rapport_historique.xlsx": BASE_DIR / "rapports_donnees" / "rapport_historique.xlsx",
 }
 MIME_TYPES = {
     ".csv": "text/csv",
+    ".json": "application/json",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
@@ -91,13 +94,10 @@ def _upload_file(service, folder_id: str, local_path: Path, remote_name: str) ->
         print(f"[Drive] Mise a jour : {remote_name}")
         return
 
-    service.files().create(
-        body={"name": remote_name, "parents": [folder_id]},
-        media_body=media,
-        fields="id",
-        supportsAllDrives=True,
-    ).execute()
-    print(f"[Drive] Creation : {remote_name}")
+    print(
+        f"[Drive] Fichier distant absent, creation ignoree : {remote_name} | "
+        "Cree ce fichier une fois manuellement dans le dossier Drive, puis les prochaines executions pourront le mettre a jour."
+    )
 
 
 def pull_files() -> None:
