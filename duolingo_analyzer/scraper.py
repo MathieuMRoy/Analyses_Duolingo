@@ -7,7 +7,6 @@ import json
 import random
 import time
 import threading
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
@@ -15,6 +14,7 @@ from .config import (
     DUOLINGO_PROFILE_API,
     SESSION,
     DAILY_LOG_FILE,
+    now_toronto,
 )
 
 MAX_RETRIES = 2  # Nombre de tentatives supplémentaires en cas d'échec
@@ -142,7 +142,7 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
     PARTIE 1 : Version Ultra-Speed (Parallel processing).
     Process 10,000 users in < 20 minutes (12 workers).
     """
-    aujourdhui = datetime.now().strftime("%Y-%m-%d")
+    aujourdhui = now_toronto().strftime("%Y-%m-%d")
     print("\n" + "=" * 60)
     print(f"  PARTIE 1 — COLLECTE ULTRA-SPEED ({aujourdhui})")
     print(f"  Cible : {len(utilisateurs_cibles)} utilisateurs")

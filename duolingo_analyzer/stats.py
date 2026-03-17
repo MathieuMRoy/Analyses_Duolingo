@@ -9,7 +9,7 @@ import shutil
 import numbers
 import pandas as pd
 
-from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE, REPORT_DIR
+from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE, REPORT_DIR, now_toronto
 from .excel_dashboard import refresh_trends_dashboard
 
 SUMMARY_SHEET = "ðŸ“Š RÃ©sumÃ© Financier Q1"
@@ -242,8 +242,9 @@ def calculer_statistiques() -> dict | None:
     df = df[~df["Username"].str.contains("Aggregated", na=False)]
     df = df[df["Cohort"] != "Global"]
 
-    aujourdhui = datetime.now().strftime("%Y-%m-%d")
-    hier = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    now_local = now_toronto()
+    aujourdhui = now_local.strftime("%Y-%m-%d")
+    hier = (now_local - timedelta(days=1)).strftime("%Y-%m-%d")
 
     df_jour = df[df["Date"] == aujourdhui]
     df_hier = df[df["Date"] == hier]

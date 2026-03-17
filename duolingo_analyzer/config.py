@@ -4,7 +4,9 @@ Module de configuration global pour le projet Duolingo Engagement.
 import sys
 import os
 import requests
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 # ─── Compatibilité Windows (encodage UTF-8 pour la console) ─────────────────
@@ -21,10 +23,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 REPORT_DIR = BASE_DIR / "rapports_donnees"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-from datetime import datetime
 TARGET_USERS_FILE = BASE_DIR / "target_users.csv"
 DAILY_LOG_FILE = BASE_DIR / "daily_streaks_log.csv"
-date_str = datetime.now().strftime("%Y-%m-%d")
+APP_TIMEZONE = ZoneInfo("America/Toronto")
+
+
+def now_toronto() -> datetime:
+    return datetime.now(APP_TIMEZONE)
+
+
+date_str = now_toronto().strftime("%Y-%m-%d")
 DAILY_RAPPORT_EXCEL_FILE = REPORT_DIR / f"rapport_{date_str}.xlsx"
 # Fichier unique qui s'enrichit chaque jour (historique)
 RAPPORT_EXCEL_FILE = REPORT_DIR / "rapport_historique.xlsx"
