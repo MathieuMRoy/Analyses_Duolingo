@@ -3,7 +3,7 @@ name: Daily Duolingo Report
 on:
   workflow_dispatch:
   schedule:
-    - cron: "5 * * * *"
+    - cron: "0 * * * *"
 
 concurrency:
   group: duolingo-daily-report
@@ -27,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Gate execution to noon Toronto
+      - name: Gate execution to 11am Toronto
         id: gate
         shell: bash
         run: |
@@ -37,7 +37,7 @@ jobs:
           fi
 
           toronto_hour=$(TZ=America/Toronto date +%H)
-          if [ "$toronto_hour" = "12" ]; then
+          if [ "$toronto_hour" = "11" ]; then
             echo "run_now=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_now=false" >> "$GITHUB_OUTPUT"

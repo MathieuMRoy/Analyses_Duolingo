@@ -1,6 +1,6 @@
 # GitHub Actions - Rapport Duolingo Quotidien
 
-Cette configuration permet de lancer l'analyse chaque jour a midi, heure de Toronto, meme si ton ordinateur est eteint.
+Cette configuration permet de lancer l'analyse chaque jour a 11h, heure de Toronto, meme si ton ordinateur est eteint.
 
 ## Ce que fait le workflow
 
@@ -9,7 +9,7 @@ Cette configuration permet de lancer l'analyse chaque jour a midi, heure de Toro
 3. Renvoie les fichiers mis a jour dans le meme dossier Google Drive.
 4. Sauvegarde aussi les artefacts du run dans GitHub Actions.
 
-Le workflow tourne toutes les heures, mais il ne lance vraiment l'analyse que lorsqu'il est 12:00 a Toronto. Cette approche gere automatiquement les changements d'heure.
+Le workflow tourne toutes les heures, mais il ne lance vraiment l'analyse que lorsqu'il est 11:00 a Toronto. Cette approche gere automatiquement les changements d'heure.
 
 ## Etapes de mise en place
 
