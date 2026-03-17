@@ -19,6 +19,7 @@ load_dotenv()
 # BASE_DIR pointe vers le dossier parent (S:\Analyses_Duolingo)
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPORT_DIR = BASE_DIR / "rapports_donnees"
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 from datetime import datetime
 TARGET_USERS_FILE = BASE_DIR / "target_users.csv"
