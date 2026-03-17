@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from math import ceil, floor
 from datetime import datetime
@@ -14,9 +14,21 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .config import DAILY_LOG_FILE
 
-SUMMARY_SHEET = "\U0001F4CA R\u00e9sum\u00e9 Financier Q1"
-TREND_SHEET = "\U0001F4C8 Tendances Mensuelles"
-CHART_DATA_SHEET = "\U0001F4CA Donn\u00e9es Graphique"
+SUMMARY_SHEET = "📊 Résumé Financier Q1"
+TREND_SHEET = "📈 Tendances Mensuelles"
+CHART_DATA_SHEET = "📊 Données Graphique"
+
+PERCENT_RATIO_COLUMNS = {
+    "Taux Abonn. Super",
+    "Taux d'Abandon Global",
+    "Score d'Engagement",
+    "Abandon Debutants",
+    "Abandon Standard",
+    "Abandon Super-Actifs",
+    "Conv. Super moy.",
+    "Taux d'abandon moyen",
+    "Score d'eng. moyen",
+}
 
 
 def _parse_float(value: object) -> float | None:
@@ -31,7 +43,8 @@ def _parse_float(value: object) -> float | None:
         cleaned = raw.replace(",", ".")
         cleaned = cleaned.replace("XP", "").replace("xp", "")
         cleaned = cleaned.replace("%", "")
-        cleaned = re.sub(r"[^0-9\\.\\-\\+]", "", cleaned)
+        cleaned = cleaned.replace("−", "-")
+        cleaned = re.sub(r"[^0-9\.\-\+]", "", cleaned)
         if cleaned in {"", "+", "-"}:
             return None
         try:
@@ -95,6 +108,13 @@ def _first_existing_column(df: pd.DataFrame, names: list[str]) -> str | None:
     return None
 
 
+def _normalize_percent_series(series: pd.Series) -> pd.Series:
+    parsed = series.apply(_parse_float)
+    return parsed.apply(
+        lambda x: (x / 100) if isinstance(x, numbers.Number) and abs(x) > 1 else x
+    )
+
+
 def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
     if summary_df.empty or "Date" not in summary_df.columns:
         return pd.DataFrame(
@@ -120,14 +140,14 @@ def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     metric_columns = {
-        "Serie Moyenne (Jours)": ["S\u00e9rie Moyenne (Jours)", "Moyenne Streak (J)"],
-        "Apprentissage (XP/j)": ["Apprentissage (XP/j)", "Delta XP (Intensit\u00e9)"],
+        "Serie Moyenne (Jours)": ["Série Moyenne (Jours)", "Moyenne Streak (J)"],
+        "Apprentissage (XP/j)": ["Apprentissage (XP/j)", "Delta XP (Intensité)"],
         "Taux Abonn. Super": ["Taux Abonn. Super", "Conversion Premium"],
         "Taux d'Abandon Global": ["Taux d'Abandon Global", "Taux d'Attrition Global", "Churn Global"],
         "Reactivations vs Veille": ["Reactivations vs Veille"],
-        "Score d'Engagement": ["Score d'Engagement", "Score Sant\u00e9 Global"],
+        "Score d'Engagement": ["Score d'Engagement", "Score Santé Global"],
         "Panel Total": ["Panel Total", "Total Profils"],
-        "Abandon Debutants": ["Abandon D\u00e9butants", "Churn D\u00e9butants"],
+        "Abandon Debutants": ["Abandon Débutants", "Churn Débutants"],
         "Abandon Standard": ["Abandon Standard", "Churn Standard"],
         "Abandon Super-Actifs": ["Abandon Super-Actifs", "Churn Super-Actifs"],
     }
@@ -136,7 +156,10 @@ def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
     for target, options in metric_columns.items():
         source = _first_existing_column(df, options)
         if source:
-            normalized[target] = df[source].apply(_parse_float)
+            if target in PERCENT_RATIO_COLUMNS:
+                normalized[target] = _normalize_percent_series(df[source])
+            else:
+                normalized[target] = df[source].apply(_parse_float)
         else:
             normalized[target] = None
 
@@ -252,7 +275,7 @@ def _prepare_snapshot_df(chart_df: pd.DataFrame) -> pd.DataFrame:
     latest = df.iloc[-1]
     mapping = [
         ("Panel global", "Moyenne Panel Global"),
-        ("Debutants", "Cohorte Debutants (<1k XP)"),
+        ("Debutants", "Cohorte Débutants (<1k XP)"),
         ("Standard", "Cohorte Standard (1k-5k XP)"),
         ("Super-Actifs", "Cohorte Super-Actifs (>5k XP)"),
     ]
@@ -280,6 +303,9 @@ def _prepare_snapshot_df_from_log() -> pd.DataFrame:
 
     df = df[~df["Username"].astype(str).str.contains("Aggregated", na=False)].copy()
     df = df[df["Cohort"] != "Global"]
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df = df.dropna(subset=["Date"])
+    df = df.sort_values(["Date", "Username"]).drop_duplicates(subset=["Date", "Username"], keep="last")
     if df.empty:
         return pd.DataFrame(columns=["Segment", "Taux"])
 
@@ -324,8 +350,10 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
 
     df = df[~df["Username"].astype(str).str.contains("Aggregated", na=False)].copy()
     df = df[df["Cohort"] != "Global"]
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
     df["Streak"] = df["Streak"].apply(_parse_float)
-    df = df.dropna(subset=["Streak"])
+    df = df.dropna(subset=["Date", "Streak"])
+    df = df.sort_values(["Date", "Username"]).drop_duplicates(subset=["Date", "Username"], keep="last")
     if df.empty:
         return {}
 
@@ -341,7 +369,7 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
 
     panel_total = len(current_df)
     active_users = int((current_df["Streak"] > 0).sum())
-    engagement_score = (active_users / panel_total * 100) if panel_total else None
+    engagement_score = (active_users / panel_total) if panel_total else None
     avg_streak = current_df["Streak"].mean() if panel_total else None
 
     snapshot: dict[str, float | str | None] = {
@@ -371,14 +399,15 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
     )
     if merged.empty:
         return snapshot
+
     snapshot["reactivated_users"] = int(((merged["Streak_prev"] == 0) & (merged["Streak_curr"] > 0)).sum())
 
     dropped_mask = (merged["Streak_prev"] > 0) & (merged["Streak_curr"] == 0)
     active_prev = int((merged["Streak_prev"] > 0).sum())
     if active_prev > 0:
-        abandon_global = dropped_mask.sum() / active_prev * 100
+        abandon_global = dropped_mask.sum() / active_prev
         snapshot["abandon_global"] = abandon_global
-        snapshot["retention_rate"] = 100 - abandon_global
+        snapshot["retention_rate"] = 1 - abandon_global
 
     cohort_col = "Cohort_curr" if "Cohort_curr" in merged.columns else "Cohort_prev"
     cohort_keys = {
@@ -393,7 +422,6 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
             snapshot[output_key] = (
                 ((cohort_df["Streak_prev"] > 0) & (cohort_df["Streak_curr"] == 0)).sum()
                 / active_prev_cohort
-                * 100
             )
 
     return snapshot
@@ -413,7 +441,7 @@ def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, fl
     engagement_score = _parse_float(latest.get("Score d'Engagement"))
     active_users = None
     if panel_total is not None and engagement_score is not None:
-        active_users = int(round(panel_total * engagement_score / 100))
+        active_users = int(round(panel_total * engagement_score))
 
     return {
         "date_label": latest["Date"].strftime("%Y-%m-%d"),
@@ -423,7 +451,7 @@ def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, fl
         "reactivated_users": _parse_float(latest.get("Reactivations vs Veille")),
         "avg_streak": _parse_float(latest.get("Serie Moyenne (Jours)")),
         "abandon_global": _parse_float(latest.get("Taux d'Abandon Global")),
-        "retention_rate": None,
+        "retention_rate": None if _parse_float(latest.get("Taux d'Abandon Global")) is None else 1 - _parse_float(latest.get("Taux d'Abandon Global")),
         "abandon_debutants": _parse_float(latest.get("Abandon Debutants")),
         "abandon_standard": _parse_float(latest.get("Abandon Standard")),
         "abandon_super_actifs": _parse_float(latest.get("Abandon Super-Actifs")),
@@ -488,13 +516,13 @@ def _write_section_header(ws, cell_range: str, title: str, fill_color: str, whit
 def _format_points(value: float | None) -> str:
     if value is None or pd.isna(value):
         return "N/A"
-    return f"{float(value):+.1f} pts"
+    return f"{float(value) * 100:+.1f} pts"
 
 
 def _format_percent(value: float | None) -> str:
     if value is None or pd.isna(value):
         return "N/A"
-    return f"{float(value):.1f}%"
+    return f"{float(value) * 100:.1f}%"
 
 
 def _format_integer(value: float | None) -> str:
@@ -585,7 +613,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         wb.remove(wb[CHART_DATA_SHEET])
 
     chart_ws = wb.create_sheet(CHART_DATA_SHEET)
-    trend_index = _sheet_index(wb, "\U0001F4D6 Dictionnaire des KPIs", len(wb.sheetnames))
+    trend_index = _sheet_index(wb, "📖 Dictionnaire des KPIs", len(wb.sheetnames))
     trend_ws = wb.create_sheet(TREND_SHEET, trend_index + 1)
 
     chart_ws.append(["Date", "Taux Abonn. Super"])
@@ -712,8 +740,11 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         trend_chart.title = None
         trend_chart.y_axis.title = None
         trend_chart.x_axis.title = None
-        min_val = float(global_df["Taux Abonn. Super"].min())
-        max_val = float(global_df["Taux Abonn. Super"].max())
+
+        series_percent = global_df["Taux Abonn. Super"] * 100
+        min_val = float(series_percent.min())
+        max_val = float(series_percent.max())
+
         trend_chart.y_axis.scaling.min = max(0, floor((min_val - 2) / 5) * 5)
         trend_chart.y_axis.scaling.max = ceil((max_val + 2) / 5) * 5
         trend_chart.x_axis.tickLblPos = "low"
@@ -805,8 +836,8 @@ def refresh_trends_dashboard(report_path: Path) -> None:
 
             values = [
                 segment,
-                _format_percent(taux),
-                _format_points(gap) if gap is not None else "N/A",
+                f"{float(taux):.1f}%" if taux is not None and not pd.isna(taux) else "N/A",
+                f"{float(gap):+.1f} pts" if gap is not None and not pd.isna(gap) else "N/A",
                 lecture,
             ]
             for col, value in zip(table_cols, values):
