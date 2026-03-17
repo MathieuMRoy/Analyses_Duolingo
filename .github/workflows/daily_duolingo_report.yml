@@ -1,9 +1,10 @@
-name: Daily Duolingo Report
+﻿name: Daily Duolingo Report
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 15 * * *"
+    - cron: "0 16 * * *"
 
 concurrency:
   group: duolingo-daily-report

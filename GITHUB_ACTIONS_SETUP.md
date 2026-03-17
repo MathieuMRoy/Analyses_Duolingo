@@ -1,4 +1,4 @@
-# GitHub Actions - Rapport Duolingo Quotidien
+﻿# GitHub Actions - Rapport Duolingo Quotidien
 
 Cette configuration permet de lancer l'analyse chaque jour a 11h, heure de Toronto, meme si ton ordinateur est eteint.
 
@@ -9,7 +9,7 @@ Cette configuration permet de lancer l'analyse chaque jour a 11h, heure de Toron
 3. Renvoie les fichiers mis a jour dans le meme dossier Google Drive.
 4. Sauvegarde aussi les artefacts du run dans GitHub Actions.
 
-Le workflow tourne toutes les heures, mais il ne lance vraiment l'analyse que lorsqu'il est 11:00 a Toronto. Cette approche gere automatiquement les changements d'heure.
+Le workflow se declenche deux fois par jour, a 15:00 UTC et 16:00 UTC, puis ne lance vraiment l'analyse que lorsqu'il est 11:00 a Toronto. Cette approche gere automatiquement les changements d'heure tout en evitant le bruit de 24 runs par jour.
 
 ## Etapes de mise en place
 
@@ -45,3 +45,4 @@ Le workflow tourne toutes les heures, mais il ne lance vraiment l'analyse que lo
 - Le depot doit etre prive.
 - `target_users.csv` doit etre present dans le depot.
 - Si `GOOGLE_API_KEY` est absent, le workflow peut quand meme tourner, mais le rapport IA retombera sur le mode local/placeholder.
+
