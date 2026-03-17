@@ -21,7 +21,7 @@ SUMMARY_COLUMNS = [
     "Apprentissage (XP/j)",
     "Taux Abonn. Super",
     "Taux Abonn. Max",
-    "Taux d'Attrition Global",
+    "Taux d'Abandon Global",
     "Abandon Débutants",
     "Abandon Standard",
     "Abandon Super-Actifs",
@@ -39,9 +39,9 @@ SUMMARY_COLUMN_ALIASES = {
     "Conversion Premium": "Taux Abonn. Super",
     "Taux Abonn. Super": "Taux Abonn. Super",
     "Taux Abonn. Max": "Taux Abonn. Max",
-    "Churn Global": "Taux d'Attrition Global",
-    "Taux d'Abandon Global": "Taux d'Attrition Global",
-    "Taux d'Attrition Global": "Taux d'Attrition Global",
+    "Churn Global": "Taux d'Abandon Global",
+    "Taux d'Abandon Global": "Taux d'Abandon Global",
+    "Taux d'Attrition Global": "Taux d'Abandon Global",
     "Churn Débutants": "Abandon Débutants",
     "Abandon Débutants": "Abandon Débutants",
     "Churn Standard": "Abandon Standard",
@@ -287,12 +287,12 @@ def calculer_statistiques() -> dict | None:
     print(f"     • Utilisateurs Actifs : {stats['utilisateurs_actifs']}")
     print(f"     • Pénétration Super Duolingo : {stats['taux_conversion_plus']:.1f}%")
     print(f"     • Pénétration Duolingo Max    : {stats['taux_conversion_max']:.1f}%")
-    print(f"     • Ruptures de Série (Churn) : {stats['streaks_tombes_zero']}")
-    print(f"     • Taux d'Attrition Global : {stats.get('taux_churn', 0):.1f}%")
+    print(f"     • Ruptures de Série (abandons) : {stats['streaks_tombes_zero']}")
+    print(f"     • Taux d'Abandon Global : {stats.get('taux_churn', 0):.1f}%")
     
     print(f"\n     • Analyse par Segment (Cohorte) :")
     for nom, donnees in stats["cohortes"].items():
-        print(f"       - {nom:12s} : {donnees['actifs']}/{donnees['total']} actifs | Attrition: {donnees['churn']:.1f}%")
+        print(f"       - {nom:12s} : {donnees['actifs']}/{donnees['total']} actifs | Taux d'abandon: {donnees['churn']:.1f}%")
         
     print(f"\n     • Profils collectés aujourd'hui : {stats['nb_profils_jour']}\n")
 
@@ -343,7 +343,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 "Apprentissage (XP/j)": round(stats.get('delta_xp_moyen', 0), 0),
                 "Taux Abonn. Super": round(stats.get('taux_conversion_plus', 0), 1),
                 "Taux Abonn. Max": round(stats.get('taux_conversion_max', 0), 1),
-                "Taux d'Attrition Global": round(stats.get('taux_churn', 0), 2),
+                "Taux d'Abandon Global": round(stats.get('taux_churn', 0), 2),
                 "Abandon Débutants": round(stats.get('cohortes', {}).get('Debutants', {}).get('churn', 0), 1),
                 "Abandon Standard": round(stats.get('cohortes', {}).get('Standard', {}).get('churn', 0), 1),
                 "Abandon Super-Actifs": round(stats.get('cohortes', {}).get('Super-Actifs', {}).get('churn', 0), 1),
@@ -386,7 +386,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 {"KPI": "Apprentissage (XP/j)", "Définition": "Gain moyen de points d'expérience (XP) depuis hier. Mesure l'effort d'apprentissage quotidien."},
                 {"KPI": "Taux Abonn. Super", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Super Duolingo' (hasPlus)."},
                 {"KPI": "Taux Abonn. Max", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Duolingo Max' (AI features)."},
-                {"KPI": "Taux d'Attrition Global", "Définition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombé à 0)."},
+                {"KPI": "Taux d'Abandon Global", "Définition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombe a 0)."},
                 {"KPI": "Abandon Débutants", "Définition": "Taux d'abandon spécifique aux utilisateurs ayant moins de 1000 XP au total."},
                 {"KPI": "Abandon Standard", "Définition": "Taux d'abandon spécifique aux utilisateurs ayant entre 1000 et 5000 XP."},
                 {"KPI": "Abandon Super-Actifs", "Définition": "Taux d'abandon spécifique à l'élite ayant plus de 5000 XP."},

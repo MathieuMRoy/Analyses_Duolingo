@@ -45,13 +45,13 @@ def generer_rapport_ia(stats: dict) -> str:
 
     system_prompt = (
         "Tu es un Analyste Financier Senior (Buy-Side) couvrant l'action Duolingo (NASDAQ: DUOL). "
-        "Ton objectif est d'analyser les indicateurs d'engagement quotidiens (Rétention, Churn, DAU) "
+        "Ton objectif est d'analyser les indicateurs d'engagement quotidiens (Retention, taux d'abandon, DAU) "
         "pour anticiper les résultats financiers du trimestre en cours (Q1 2026) et guider les décisions d'investissement. "
         "Produis un rapport structuré avec des sections claires pour une intégration dans un tableau de bord Excel. "
         "UTILISE EXCLUSIVEMENT les balises suivantes pour délimiter tes sections :\n"
         "[TITRE] (Un titre financier percutant (ex: 'DUOL - Mise à jour Q1 2026'))\n"
         "[RESUME] (Résumé de la thèse d'investissement basée sur l'engagement en 2-3 phrases)\n"
-        "[TENDANCES] (Impact des métriques de rétention/churn sur le modèle de revenus futurs)\n"
+        "[TENDANCES] (Impact des metriques de retention et de taux d'abandon sur le modele de revenus futurs)\n"
         "[ATTENTION] (Risques d'exécution, essoufflement de l'engagement ou baisse d'utilisateurs monétisables)\n"
         "[CONSEILS] (Recommandations pour les investisseurs : anticiper une hausse/baisse, points à surveiller)\n"
         "Sois pro, direct, utilise un vocabulaire financier (guidance, top-line, MAU/DAU, conversion) et n'ajoute aucun texte en dehors des balises."

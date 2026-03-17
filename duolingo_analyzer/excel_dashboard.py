@@ -14,9 +14,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .config import DAILY_LOG_FILE
 
-SUMMARY_SHEET = "📊 Résumé Financier Q1"
-TREND_SHEET = "📈 Tendances Mensuelles"
-CHART_DATA_SHEET = "📊 Données Graphique"
+SUMMARY_SHEET = "\U0001F4CA R\u00e9sum\u00e9 Financier Q1"
+TREND_SHEET = "\U0001F4C8 Tendances Mensuelles"
+CHART_DATA_SHEET = "\U0001F4CA Donn\u00e9es Graphique"
 
 
 def _parse_float(value: object) -> float | None:
@@ -31,13 +31,29 @@ def _parse_float(value: object) -> float | None:
         cleaned = raw.replace(",", ".")
         cleaned = cleaned.replace("XP", "").replace("xp", "")
         cleaned = cleaned.replace("%", "")
-        cleaned = re.sub(r"[^0-9\.\-\+]", "", cleaned)
+        cleaned = re.sub(r"[^0-9\\.\\-\\+]", "", cleaned)
         if cleaned in {"", "+", "-"}:
             return None
         try:
             return float(cleaned)
         except ValueError:
             return None
+    return None
+
+
+def _parse_bool_fraction(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    if isinstance(value, numbers.Number):
+        return 1.0 if float(value) != 0 else 0.0
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {"true", "vrai", "1", "yes", "oui"}:
+            return 1.0
+        if raw in {"false", "faux", "0", "no", "non", ""}:
+            return 0.0
     return None
 
 
@@ -72,98 +88,143 @@ def _coerce_dates(series: pd.Series) -> pd.Series:
     return series.apply(_parse_date)
 
 
-def _prepare_global_trend_df(summary_df: pd.DataFrame) -> pd.DataFrame:
-    if summary_df.empty:
-        return pd.DataFrame(columns=["Libelle", "Taux Abonn. Super"])
+def _first_existing_column(df: pd.DataFrame, names: list[str]) -> str | None:
+    for name in names:
+        if name in df.columns:
+            return name
+    return None
+
+
+def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
+    if summary_df.empty or "Date" not in summary_df.columns:
+        return pd.DataFrame(
+            columns=[
+                "Date",
+                "Serie Moyenne (Jours)",
+                "Apprentissage (XP/j)",
+                "Taux Abonn. Super",
+                "Taux d'Abandon Global",
+                "Score d'Engagement",
+                "Panel Total",
+                "Abandon Debutants",
+                "Abandon Standard",
+                "Abandon Super-Actifs",
+            ]
+        )
 
     df = summary_df.copy()
-    df["Date"] = _coerce_dates(df.get("Date"))
-    if "Taux Abonn. Super" in df.columns:
-        df["Taux Abonn. Super"] = df["Taux Abonn. Super"].apply(_parse_float)
-    else:
-        df["Taux Abonn. Super"] = None
+    df["Date"] = _coerce_dates(df["Date"])
+    df = df.dropna(subset=["Date"]).sort_values("Date")
+    if df.empty:
+        return df
 
-    df = df.dropna(subset=["Date", "Taux Abonn. Super"]).sort_values("Date")
+    metric_columns = {
+        "Serie Moyenne (Jours)": ["S\u00e9rie Moyenne (Jours)", "Moyenne Streak (J)"],
+        "Apprentissage (XP/j)": ["Apprentissage (XP/j)", "Delta XP (Intensit\u00e9)"],
+        "Taux Abonn. Super": ["Taux Abonn. Super", "Conversion Premium"],
+        "Taux d'Abandon Global": ["Taux d'Abandon Global", "Taux d'Attrition Global", "Churn Global"],
+        "Score d'Engagement": ["Score d'Engagement", "Score Sant\u00e9 Global"],
+        "Panel Total": ["Panel Total", "Total Profils"],
+        "Abandon Debutants": ["Abandon D\u00e9butants", "Churn D\u00e9butants"],
+        "Abandon Standard": ["Abandon Standard", "Churn Standard"],
+        "Abandon Super-Actifs": ["Abandon Super-Actifs", "Churn Super-Actifs"],
+    }
+
+    normalized = pd.DataFrame({"Date": df["Date"]})
+    for target, options in metric_columns.items():
+        source = _first_existing_column(df, options)
+        if source:
+            normalized[target] = df[source].apply(_parse_float)
+        else:
+            normalized[target] = None
+
+    return normalized.sort_values("Date").reset_index(drop=True)
+
+
+def _prepare_global_trend_df(summary_df: pd.DataFrame) -> pd.DataFrame:
+    normalized = _prepare_summary_metrics_df(summary_df)
+    if normalized.empty:
+        return pd.DataFrame(columns=["Libelle", "Taux Abonn. Super"])
+
+    df = normalized.dropna(subset=["Taux Abonn. Super"]).copy()
     df["Libelle"] = df["Date"].dt.strftime("%d %b")
     return df[["Libelle", "Taux Abonn. Super"]]
 
 
-def _prepare_monthly_comparison_df(summary_df: pd.DataFrame) -> pd.DataFrame:
-    if summary_df.empty:
+def _prepare_weekly_comparison_df(summary_df: pd.DataFrame) -> pd.DataFrame:
+    normalized = _prepare_summary_metrics_df(summary_df)
+    if normalized.empty:
         return pd.DataFrame(
             columns=[
-                "Mois",
+                "Semaine",
+                "Jours observes",
+                "XP moyen",
+                "Delta XP vs S-1",
                 "Conv. Super moy.",
-                "Δ Conv. vs M-1",
-                "Score d'eng. moy.",
-                "Δ Score vs M-1",
-                "Churn moyen",
+                "Delta Conv. vs S-1",
+                "Taux d'abandon moyen",
+                "Delta Abandon vs S-1",
+                "Score d'eng. moyen",
+                "Delta Score vs S-1",
                 "Panel moyen",
             ]
         )
 
-    df = summary_df.copy()
-    df["Date"] = _coerce_dates(df.get("Date"))
-    df = df.dropna(subset=["Date"]).sort_values("Date")
-    if df.empty:
-        return pd.DataFrame(
-            columns=[
-                "Mois",
-                "Conv. Super moy.",
-                "Δ Conv. vs M-1",
-                "Score d'eng. moy.",
-                "Δ Score vs M-1",
-                "Churn moyen",
-                "Panel moyen",
-            ]
-        )
+    df = normalized.copy()
+    df["WeekStart"] = df["Date"] - pd.to_timedelta(df["Date"].dt.weekday, unit="D")
+    df["WeekEnd"] = df["WeekStart"] + pd.Timedelta(days=6)
 
-    for col in ["Taux Abonn. Super", "Score d'Engagement", "Taux d'Attrition Global", "Panel Total"]:
-        if col in df.columns:
-            df[col] = df[col].apply(_parse_float)
-        else:
-            df[col] = None
-
-    df["Month"] = df["Date"].dt.to_period("M")
-    monthly = (
-        df.groupby("Month", as_index=False)
+    weekly = (
+        df.groupby(["WeekStart", "WeekEnd"], as_index=False)
         .agg(
             {
+                "Date": "nunique",
+                "Apprentissage (XP/j)": "mean",
                 "Taux Abonn. Super": "mean",
+                "Taux d'Abandon Global": "mean",
                 "Score d'Engagement": "mean",
-                "Taux d'Attrition Global": "mean",
                 "Panel Total": "mean",
             }
         )
-        .sort_values("Month")
+        .sort_values("WeekStart")
     )
 
-    monthly["Mois"] = monthly["Month"].astype(str)
-    monthly["Δ Conv. vs M-1"] = monthly["Taux Abonn. Super"].diff()
-    monthly["Δ Score vs M-1"] = monthly["Score d'Engagement"].diff()
+    weekly["Semaine"] = (
+        weekly["WeekStart"].dt.strftime("%d %b")
+        + " - "
+        + weekly["WeekEnd"].dt.strftime("%d %b")
+    )
+    weekly["Delta XP vs S-1"] = weekly["Apprentissage (XP/j)"].diff()
+    weekly["Delta Conv. vs S-1"] = weekly["Taux Abonn. Super"].diff()
+    weekly["Delta Abandon vs S-1"] = weekly["Taux d'Abandon Global"].diff()
+    weekly["Delta Score vs S-1"] = weekly["Score d'Engagement"].diff()
 
-    monthly = monthly.rename(
+    weekly = weekly.rename(
         columns={
+            "Date": "Jours observes",
+            "Apprentissage (XP/j)": "XP moyen",
             "Taux Abonn. Super": "Conv. Super moy.",
-            "Score d'Engagement": "Score d'eng. moy.",
-            "Taux d'Attrition Global": "Churn moyen",
+            "Taux d'Abandon Global": "Taux d'abandon moyen",
+            "Score d'Engagement": "Score d'eng. moyen",
             "Panel Total": "Panel moyen",
         }
     )
 
-    monthly = monthly[
+    return weekly[
         [
-            "Mois",
+            "Semaine",
+            "Jours observes",
+            "XP moyen",
+            "Delta XP vs S-1",
             "Conv. Super moy.",
-            "Δ Conv. vs M-1",
-            "Score d'eng. moy.",
-            "Δ Score vs M-1",
-            "Churn moyen",
+            "Delta Conv. vs S-1",
+            "Taux d'abandon moyen",
+            "Delta Abandon vs S-1",
+            "Score d'eng. moyen",
+            "Delta Score vs S-1",
             "Panel moyen",
         ]
-    ].tail(6)
-
-    return monthly.reset_index(drop=True)
+    ].tail(8).reset_index(drop=True)
 
 
 def _prepare_snapshot_df(chart_df: pd.DataFrame) -> pd.DataFrame:
@@ -189,7 +250,7 @@ def _prepare_snapshot_df(chart_df: pd.DataFrame) -> pd.DataFrame:
     latest = df.iloc[-1]
     mapping = [
         ("Panel global", "Moyenne Panel Global"),
-        ("Débutants", "Cohorte Débutants (<1k XP)"),
+        ("Debutants", "Cohorte Debutants (<1k XP)"),
         ("Standard", "Cohorte Standard (1k-5k XP)"),
         ("Super-Actifs", "Cohorte Super-Actifs (>5k XP)"),
     ]
@@ -220,6 +281,11 @@ def _prepare_snapshot_df_from_log() -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Segment", "Taux"])
 
+    df["HasPlusValue"] = df["HasPlus"].apply(_parse_bool_fraction)
+    df = df.dropna(subset=["HasPlusValue"])
+    if df.empty:
+        return pd.DataFrame(columns=["Segment", "Taux"])
+
     counts = df.groupby("Date").size()
     valid_dates = counts[counts >= 100].index.tolist()
     latest_date = valid_dates[-1] if valid_dates else df["Date"].max()
@@ -227,21 +293,136 @@ def _prepare_snapshot_df_from_log() -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Segment", "Taux"])
 
-    rows = [
-        {"Segment": "Panel global", "Taux": round(df["HasPlus"].mean() * 100, 1)},
-    ]
+    rows = [{"Segment": "Panel global", "Taux": round(df["HasPlusValue"].mean() * 100, 1)}]
 
     label_map = {
-        "Debutants": "Débutants",
+        "Debutants": "Debutants",
         "Standard": "Standard",
         "Super-Actifs": "Super-Actifs",
     }
     for cohort, label in label_map.items():
         subset = df[df["Cohort"] == cohort]
         if not subset.empty:
-            rows.append({"Segment": label, "Taux": round(subset["HasPlus"].mean() * 100, 1)})
+            rows.append({"Segment": label, "Taux": round(subset["HasPlusValue"].mean() * 100, 1)})
 
     return pd.DataFrame(rows)
+
+
+def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | None]:
+    if not DAILY_LOG_FILE.exists():
+        return {}
+
+    try:
+        df = pd.read_csv(DAILY_LOG_FILE, usecols=["Date", "Username", "Cohort", "Streak"])
+    except Exception:
+        return {}
+
+    if df.empty:
+        return {}
+
+    df = df[~df["Username"].astype(str).str.contains("Aggregated", na=False)].copy()
+    df = df[df["Cohort"] != "Global"]
+    df["Streak"] = df["Streak"].apply(_parse_float)
+    df = df.dropna(subset=["Streak"])
+    if df.empty:
+        return {}
+
+    dates = sorted(df["Date"].dropna().unique().tolist())
+    if not dates:
+        return {}
+
+    latest_date = dates[-1]
+    previous_date = dates[-2] if len(dates) > 1 else None
+    current_df = df[df["Date"] == latest_date].copy()
+    if current_df.empty:
+        return {}
+
+    panel_total = len(current_df)
+    active_users = int((current_df["Streak"] > 0).sum())
+    engagement_score = (active_users / panel_total * 100) if panel_total else None
+    avg_streak = current_df["Streak"].mean() if panel_total else None
+
+    snapshot: dict[str, float | str | None] = {
+        "date_label": str(latest_date),
+        "panel_total": panel_total,
+        "active_users": active_users,
+        "engagement_score": engagement_score,
+        "avg_streak": avg_streak,
+        "abandon_global": None,
+        "retention_rate": None,
+        "abandon_debutants": None,
+        "abandon_standard": None,
+        "abandon_super_actifs": None,
+    }
+
+    if previous_date is None:
+        return snapshot
+
+    previous_df = df[df["Date"] == previous_date][["Username", "Cohort", "Streak"]].copy()
+    current_metrics = current_df[["Username", "Cohort", "Streak"]].copy()
+    merged = previous_df.merge(
+        current_metrics,
+        on="Username",
+        how="inner",
+        suffixes=("_prev", "_curr"),
+    )
+    if merged.empty:
+        return snapshot
+
+    dropped_mask = (merged["Streak_prev"] > 0) & (merged["Streak_curr"] == 0)
+    active_prev = int((merged["Streak_prev"] > 0).sum())
+    if active_prev > 0:
+        abandon_global = dropped_mask.sum() / active_prev * 100
+        snapshot["abandon_global"] = abandon_global
+        snapshot["retention_rate"] = 100 - abandon_global
+
+    cohort_col = "Cohort_curr" if "Cohort_curr" in merged.columns else "Cohort_prev"
+    cohort_keys = {
+        "Debutants": "abandon_debutants",
+        "Standard": "abandon_standard",
+        "Super-Actifs": "abandon_super_actifs",
+    }
+    for cohort_name, output_key in cohort_keys.items():
+        cohort_df = merged[merged[cohort_col] == cohort_name]
+        active_prev_cohort = int((cohort_df["Streak_prev"] > 0).sum())
+        if active_prev_cohort > 0:
+            snapshot[output_key] = (
+                ((cohort_df["Streak_prev"] > 0) & (cohort_df["Streak_curr"] == 0)).sum()
+                / active_prev_cohort
+                * 100
+            )
+
+    return snapshot
+
+
+def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, float | str | None]:
+    snapshot = _prepare_daily_engagement_snapshot_from_log()
+    if snapshot:
+        return snapshot
+
+    normalized = _prepare_summary_metrics_df(summary_df)
+    if normalized.empty:
+        return {}
+
+    latest = normalized.iloc[-1]
+    panel_total = _parse_float(latest.get("Panel Total"))
+    engagement_score = _parse_float(latest.get("Score d'Engagement"))
+    active_users = None
+    if panel_total is not None and engagement_score is not None:
+        active_users = int(round(panel_total * engagement_score / 100))
+
+    return {
+        "date_label": latest["Date"].strftime("%Y-%m-%d"),
+        "panel_total": panel_total,
+        "active_users": active_users,
+        "engagement_score": engagement_score,
+        "avg_streak": _parse_float(latest.get("Serie Moyenne (Jours)")),
+        "abandon_global": _parse_float(latest.get("Taux d'Abandon Global")),
+        "retention_rate": None,
+        "abandon_debutants": _parse_float(latest.get("Abandon Debutants")),
+        "abandon_standard": _parse_float(latest.get("Abandon Standard")),
+        "abandon_super_actifs": _parse_float(latest.get("Abandon Super-Actifs")),
+    }
 
 
 def _sheet_index(wb, reference_name: str, fallback: int) -> int:
@@ -249,6 +430,15 @@ def _sheet_index(wb, reference_name: str, fallback: int) -> int:
         return wb.sheetnames.index(reference_name)
     except ValueError:
         return fallback
+
+
+def _build_border() -> Border:
+    return Border(
+        left=Side(style="thin", color="D9D9D9"),
+        right=Side(style="thin", color="D9D9D9"),
+        top=Side(style="thin", color="D9D9D9"),
+        bottom=Side(style="thin", color="D9D9D9"),
+    )
 
 
 def _write_card(
@@ -264,12 +454,7 @@ def _write_card(
     ws.merge_cells(header_range)
     ws.merge_cells(value_range)
 
-    thin = Border(
-        left=Side(style="thin", color="D9D9D9"),
-        right=Side(style="thin", color="D9D9D9"),
-        top=Side(style="thin", color="D9D9D9"),
-        bottom=Side(style="thin", color="D9D9D9"),
-    )
+    thin = _build_border()
 
     header = ws[header_range.split(":")[0]]
     header.value = title
@@ -296,9 +481,9 @@ def _write_section_header(ws, cell_range: str, title: str, fill_color: str, whit
 
 
 def _format_points(value: float | None) -> str:
-    if value is None:
+    if value is None or pd.isna(value):
         return "N/A"
-    return f"{value:+.1f} pts"
+    return f"{float(value):+.1f} pts"
 
 
 def _format_percent(value: float | None) -> str:
@@ -313,14 +498,63 @@ def _format_integer(value: float | None) -> str:
     return f"{int(round(float(value))):,}".replace(",", " ")
 
 
-def _delta_font_color(value: float | None) -> str:
+def _format_streak(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "N/A"
+    return f"{float(value):.1f} j"
+
+
+def _format_xp(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "N/A"
+    return f"{int(round(float(value))):,} XP".replace(",", " ")
+
+
+def _format_xp_delta(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "N/A"
+    rounded = int(round(float(value)))
+    sign = "+" if rounded > 0 else ""
+    return f"{sign}{rounded:,} XP".replace(",", " ")
+
+
+def _delta_font_color(value: float | None, positive_is_good: bool = True) -> str:
     if value is None or pd.isna(value):
         return "666666"
-    if float(value) > 0:
-        return "008000"
-    if float(value) < 0:
-        return "C00000"
-    return "666666"
+    numeric = float(value)
+    if numeric == 0:
+        return "666666"
+    if positive_is_good:
+        return "008000" if numeric > 0 else "C00000"
+    return "008000" if numeric < 0 else "C00000"
+
+
+def _weekly_insight_text(latest_week: pd.Series | None) -> str:
+    if latest_week is None:
+        return "La lecture Week over Week apparaitra ici des qu'une semaine de resume sera disponible."
+
+    delta_xp = latest_week.get("Delta XP vs S-1")
+    delta_conv = latest_week.get("Delta Conv. vs S-1")
+    delta_abandon = latest_week.get("Delta Abandon vs S-1")
+    delta_score = latest_week.get("Delta Score vs S-1")
+
+    if all(pd.isna(value) for value in [delta_xp, delta_conv, delta_abandon, delta_score]):
+        return (
+            "La semaine en cours est bien calculee, mais il faut encore une semaine precedente "
+            "pour afficher une comparaison Week over Week."
+        )
+
+    parts: list[str] = []
+    if not pd.isna(delta_xp):
+        parts.append(f"XP moyen {_format_xp_delta(delta_xp)} vs semaine precedente")
+    if not pd.isna(delta_conv):
+        parts.append(f"conversion Super {_format_points(delta_conv)}")
+    if not pd.isna(delta_abandon):
+        parts.append(f"taux d'abandon {_format_points(delta_abandon)}")
+    if not pd.isna(delta_score):
+        parts.append(f"score d'engagement {_format_points(delta_score)}")
+
+    return "Cette semaine : " + " | ".join(parts) + "."
 
 
 def refresh_trends_dashboard(report_path: Path) -> None:
@@ -330,11 +564,13 @@ def refresh_trends_dashboard(report_path: Path) -> None:
     summary_df = _load_sheet(report_path, SUMMARY_SHEET)
     chart_df = _load_sheet(report_path, CHART_DATA_SHEET)
 
+    normalized_summary = _prepare_summary_metrics_df(summary_df)
     global_df = _prepare_global_trend_df(summary_df)
-    monthly_df = _prepare_monthly_comparison_df(summary_df)
+    weekly_df = _prepare_weekly_comparison_df(summary_df)
     snapshot_df = _prepare_snapshot_df(chart_df)
     if snapshot_df.empty:
         snapshot_df = _prepare_snapshot_df_from_log()
+    daily_snapshot = _prepare_daily_engagement_snapshot(summary_df)
 
     wb = load_workbook(report_path)
 
@@ -344,7 +580,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         wb.remove(wb[CHART_DATA_SHEET])
 
     chart_ws = wb.create_sheet(CHART_DATA_SHEET)
-    trend_index = _sheet_index(wb, "📖 Dictionnaire des KPIs", len(wb.sheetnames))
+    trend_index = _sheet_index(wb, "\U0001F4D6 Dictionnaire des KPIs", len(wb.sheetnames))
     trend_ws = wb.create_sheet(TREND_SHEET, trend_index + 1)
 
     chart_ws.append(["Date", "Taux Abonn. Super"])
@@ -371,8 +607,8 @@ def refresh_trends_dashboard(report_path: Path) -> None:
 
     trend_ws.sheet_view.showGridLines = False
     for col, width in {
-        "A": 14, "B": 14, "C": 14, "D": 14, "E": 14, "F": 14, "G": 14,
-        "H": 14, "I": 3, "J": 16, "K": 14, "L": 14, "M": 16, "N": 18,
+        "A": 16, "B": 14, "C": 14, "D": 14, "E": 14, "F": 14, "G": 14,
+        "H": 14, "I": 3, "J": 16, "K": 16, "L": 16, "M": 18, "N": 18,
     }.items():
         trend_ws.column_dimensions[col].width = width
 
@@ -385,91 +621,80 @@ def refresh_trends_dashboard(report_path: Path) -> None:
 
     trend_ws.merge_cells("A3:N3")
     subtitle = trend_ws["A3"]
-    subtitle.value = "Vue synthétique des abonnements Super et du dernier snapshot par cohorte."
+    subtitle.value = "Lecture quotidienne de l'engagement et synthese Week over Week de la monetisation."
     subtitle.font = Font(name="Calibri", size=10, italic=True, color="5A5A5A")
     subtitle.alignment = Alignment(horizontal="center", vertical="center")
 
-    latest = None
-    previous = None
-    if not summary_df.empty and "Date" in summary_df.columns:
-        temp = summary_df.copy()
-        temp["Date"] = _coerce_dates(temp["Date"])
-        temp = temp.dropna(subset=["Date"]).sort_values("Date")
-        if not temp.empty:
-            latest = temp.iloc[-1]
-            if len(temp) > 1:
-                previous = temp.iloc[-2]
-
-    if latest is not None:
-        latest_date = latest["Date"].strftime("%Y-%m-%d")
-        latest_super = _parse_float(latest.get("Taux Abonn. Super"))
-        latest_churn = _parse_float(latest.get("Taux d'Attrition Global"))
-        latest_panel = _parse_float(latest.get("Panel Total"))
-        latest_score = _parse_float(latest.get("Score d'Engagement"))
-    else:
-        latest_date = "N/A"
-        latest_super = None
-        latest_churn = None
-        latest_panel = None
-        latest_score = None
-
-    previous_super = _parse_float(previous.get("Taux Abonn. Super")) if previous is not None else None
-    delta_super = (latest_super - previous_super) if latest_super is not None and previous_super is not None else None
-
-    _write_card(trend_ws, "A5:C5", "A6:C7", "Dernier releve", latest_date, NAVY, SOFT_GREY, WHITE)
+    _write_section_header(trend_ws, "A5:N5", "Bloc quotidien", NAVY, WHITE)
     _write_card(
         trend_ws,
-        "D5:F5",
-        "D6:F7",
-        "Conv. Super",
-        f"{latest_super:.1f}%" if latest_super is not None else "N/A",
+        "A6:C6",
+        "A7:C8",
+        "Dernier releve",
+        str(daily_snapshot.get("date_label", "N/A")),
+        NAVY,
+        SOFT_GREY,
+        WHITE,
+    )
+    _write_card(
+        trend_ws,
+        "D6:F6",
+        "D7:F8",
+        "Panel observe",
+        _format_integer(daily_snapshot.get("panel_total")),
         DUO_BLUE,
         SOFT_BLUE,
         WHITE,
     )
     _write_card(
         trend_ws,
-        "G5:I5",
-        "G6:I7",
-        "Var. vs veille",
-        _format_points(delta_super),
+        "G6:I6",
+        "G7:I8",
+        "Utilisateurs actifs",
+        _format_integer(daily_snapshot.get("active_users")),
         "FF8A34",
         SOFT_ORANGE,
         WHITE,
     )
     _write_card(
         trend_ws,
-        "J5:L5",
-        "J6:L7",
+        "J6:N6",
+        "J7:N8",
         "Score d'engagement",
-        f"{latest_score:.1f}%" if latest_score is not None else "N/A",
+        _format_percent(daily_snapshot.get("engagement_score")),
         DUO_GREEN,
         SOFT_GREEN,
         WHITE,
     )
 
-    trend_ws.merge_cells("A8:L8")
-    summary_band = trend_ws["A8"]
-    summary_band.value = (
-        f"Panel suivi : {int(latest_panel):,}".replace(",", " ") if latest_panel is not None else "Panel suivi : N/A"
-    ) + (
-        f"   |   Churn global : {latest_churn:.1f}%"
-        if latest_churn is not None else
-        "   |   Churn global : N/A"
+    trend_ws.merge_cells("A9:N9")
+    daily_line = trend_ws["A9"]
+    daily_line.value = (
+        f"Taux d'abandon global : {_format_percent(daily_snapshot.get('abandon_global'))}"
+        f"   |   Retention vs hier : {_format_percent(daily_snapshot.get('retention_rate'))}"
+        f"   |   Serie moyenne : {_format_streak(daily_snapshot.get('avg_streak'))}"
     )
-    summary_band.font = Font(name="Calibri", size=10, bold=True, color="4A4A4A")
-    summary_band.alignment = Alignment(horizontal="center", vertical="center")
+    daily_line.font = Font(name="Calibri", size=10, bold=True, color="4A4A4A")
+    daily_line.alignment = Alignment(horizontal="center", vertical="center")
 
-    _write_section_header(
-        trend_ws,
-        "A10:H10",
-        "Evolution recente",
-        NAVY,
-        WHITE,
+    trend_ws.merge_cells("A10:N10")
+    cohort_line = trend_ws["A10"]
+    cohort_line.value = (
+        "Abandon par cohorte : "
+        f"Debutants {_format_percent(daily_snapshot.get('abandon_debutants'))}"
+        f"   |   Standard {_format_percent(daily_snapshot.get('abandon_standard'))}"
+        f"   |   Super-Actifs {_format_percent(daily_snapshot.get('abandon_super_actifs'))}"
     )
-    trend_ws.merge_cells("A11:H11")
-    chart_help = trend_ws["A11"]
-    chart_help.value = "Ce graphique montre l'evolution jour apres jour du taux d'abonnement Super sur l'ensemble du panel suivi."
+    cohort_line.font = Font(name="Calibri", size=9, italic=True, color="666666")
+    cohort_line.alignment = Alignment(horizontal="center", vertical="center")
+
+    _write_section_header(trend_ws, "A12:H12", "Evolution recente de la conversion", NAVY, WHITE)
+    trend_ws.merge_cells("A13:H13")
+    chart_help = trend_ws["A13"]
+    chart_help.value = (
+        "Courbe quotidienne du taux d'abonnement Super sur le panel suivi. "
+        "Elle sert de signal de monetisation dans le temps."
+    )
     chart_help.font = Font(name="Calibri", size=9, italic=True, color="666666")
     chart_help.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
@@ -515,21 +740,20 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         series.marker.graphicalProperties.solidFill = DUO_BLUE
         series.marker.graphicalProperties.line.solidFill = DUO_BLUE
 
-        trend_ws.add_chart(trend_chart, "A13")
+        trend_ws.add_chart(trend_chart, "A15")
     else:
-        trend_ws.merge_cells("A13:H18")
-        empty_msg = trend_ws["A13"]
+        trend_ws.merge_cells("A15:H20")
+        empty_msg = trend_ws["A15"]
         empty_msg.value = "Pas assez d'historique pour afficher une tendance."
         empty_msg.font = Font(name="Calibri", size=11, italic=True, color="666666")
         empty_msg.alignment = Alignment(horizontal="center", vertical="center")
 
-    _write_section_header(
-        trend_ws,
-        "J10:N10",
-        "Lecture par segment",
-        DUO_GREEN,
-        WHITE,
-    )
+    _write_section_header(trend_ws, "J12:N12", "Lecture par segment", DUO_GREEN, WHITE)
+    trend_ws.merge_cells("J13:N13")
+    segment_help = trend_ws["J13"]
+    segment_help.value = "Taux premium du dernier releve complet par segment, compares au panel global."
+    segment_help.font = Font(name="Calibri", size=9, italic=True, color="666666")
+    segment_help.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
     panel_rate = None
     if not snapshot_df.empty:
@@ -537,25 +761,18 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         panel_rate = panel_row["Taux"].iloc[0] if not panel_row.empty else None
 
     table_headers = ["Segment", "Taux premium", "Ecart vs panel", "Lecture"]
-    for col, title_value in zip(["J", "K", "L", "M"], table_headers):
-        cell = trend_ws[f"{col}12"]
+    table_cols = ["J", "K", "L", "M"]
+    for col, title_value in zip(table_cols, table_headers):
+        cell = trend_ws[f"{col}15"]
         cell.value = title_value
         cell.fill = PatternFill("solid", start_color=SOFT_GREY, end_color=SOFT_GREY)
         cell.font = Font(name="Calibri", size=10, bold=True, color="333333")
         cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = Border(
-            left=Side(style="thin", color="D9D9D9"),
-            right=Side(style="thin", color="D9D9D9"),
-            top=Side(style="thin", color="D9D9D9"),
-            bottom=Side(style="thin", color="D9D9D9"),
-        )
+        cell.border = _build_border()
 
     if not snapshot_df.empty:
         display_df = snapshot_df.copy()
-        if panel_rate is not None:
-            display_df["Gap"] = display_df["Taux"] - panel_rate
-        else:
-            display_df["Gap"] = None
+        display_df["Gap"] = display_df["Taux"] - panel_rate if panel_rate is not None else None
 
         panel_df = display_df[display_df["Segment"] == "Panel global"]
         cohorts_df = display_df[display_df["Segment"] != "Panel global"].sort_values("Taux", ascending=False)
@@ -565,10 +782,10 @@ def refresh_trends_dashboard(report_path: Path) -> None:
             "Panel global": "EAF6FF",
             "Super-Actifs": "EEF8E8",
             "Standard": "FFF7DB",
-            "Débutants": "FFF1F1",
+            "Debutants": "FFF1F1",
         }
 
-        for row_idx, row in enumerate(display_df.itertuples(index=False), start=13):
+        for row_idx, row in enumerate(display_df.itertuples(index=False), start=16):
             segment = row.Segment
             taux = row.Taux
             gap = row.Gap
@@ -583,11 +800,11 @@ def refresh_trends_dashboard(report_path: Path) -> None:
 
             values = [
                 segment,
-                f"{taux:.1f}%",
+                _format_percent(taux),
                 _format_points(gap) if gap is not None else "N/A",
                 lecture,
             ]
-            for col, value in zip(["J", "K", "L", "M"], values):
+            for col, value in zip(table_cols, values):
                 cell = trend_ws[f"{col}{row_idx}"]
                 cell.value = value
                 cell.fill = PatternFill(
@@ -597,224 +814,128 @@ def refresh_trends_dashboard(report_path: Path) -> None:
                 )
                 cell.font = Font(name="Calibri", size=10, bold=(col == "J"), color="333333")
                 if col == "L" and gap is not None:
-                    color = "008000" if gap > 0 else ("C00000" if gap < 0 else "666666")
-                    cell.font = Font(name="Calibri", size=10, bold=True, color=color)
+                    cell.font = Font(name="Calibri", size=10, bold=True, color=_delta_font_color(gap))
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                cell.border = Border(
-                    left=Side(style="thin", color="D9D9D9"),
-                    right=Side(style="thin", color="D9D9D9"),
-                    top=Side(style="thin", color="D9D9D9"),
-                    bottom=Side(style="thin", color="D9D9D9"),
-                )
+                cell.border = _build_border()
     else:
-        trend_ws.merge_cells("J13:N16")
-        empty_msg = trend_ws["J13"]
+        trend_ws.merge_cells("J16:N19")
+        empty_msg = trend_ws["J16"]
         empty_msg.value = "Pas assez de donnees pour comparer les segments."
         empty_msg.font = Font(name="Calibri", size=11, italic=True, color="666666")
         empty_msg.alignment = Alignment(horizontal="center", vertical="center")
 
-    trend_ws.merge_cells("A27:N27")
-    note = trend_ws["A27"]
+    trend_ws.merge_cells("A28:N28")
+    note = trend_ws["A28"]
     note.value = (
-        "Lecture: la courbe montre la conversion Super dans le temps. "
-        "Le tableau compare le dernier releve complet par segment au panel global."
+        "Lecture: le bloc quotidien suit l'engagement du dernier jour collecte. "
+        "La courbe suit la conversion Super dans le temps. "
+        "Le tableau de droite compare le dernier releve premium par segment au panel global."
     )
     note.font = Font(name="Calibri", size=10, italic=True, color="666666")
     note.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-    _write_section_header(
-        trend_ws,
-        "A29:N29",
-        "Comparatif mensuel",
-        NAVY,
-        WHITE,
+    _write_section_header(trend_ws, "A30:N30", "Lecture Week over Week", NAVY, WHITE)
+    trend_ws.merge_cells("A31:N31")
+    weekly_help = trend_ws["A31"]
+    weekly_help.value = (
+        "Cette section compare les moyennes hebdomadaires du resume quotidien. "
+        "Les ecarts se lisent vs la semaine precedente."
     )
-    trend_ws.merge_cells("A30:N30")
-    monthly_help = trend_ws["A30"]
-    monthly_help.value = (
-        "Cette section consolide les moyennes mensuelles du resume quotidien. "
-        "Les ecarts vs M-1 apparaissent automatiquement des qu'un nouveau mois est disponible."
-    )
-    monthly_help.font = Font(name="Calibri", size=9, italic=True, color="666666")
-    monthly_help.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    weekly_help.font = Font(name="Calibri", size=9, italic=True, color="666666")
+    weekly_help.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-    latest_month = monthly_df.iloc[-1] if not monthly_df.empty else None
-    latest_month_label = latest_month["Mois"] if latest_month is not None else "N/A"
-    latest_month_conv = latest_month["Conv. Super moy."] if latest_month is not None else None
-    latest_month_delta_conv = latest_month.iloc[2] if latest_month is not None else None
-    latest_month_score = latest_month["Score d'eng. moy."] if latest_month is not None else None
-    latest_month_delta_score = latest_month.iloc[4] if latest_month is not None else None
-    latest_month_churn = latest_month["Churn moyen"] if latest_month is not None else None
-    latest_month_panel = latest_month["Panel moyen"] if latest_month is not None else None
+    latest_week = weekly_df.iloc[-1] if not weekly_df.empty else None
+    latest_week_label = latest_week["Semaine"] if latest_week is not None else "N/A"
+    latest_week_xp = latest_week["XP moyen"] if latest_week is not None else None
+    latest_week_conv = latest_week["Conv. Super moy."] if latest_week is not None else None
+    latest_week_abandon = latest_week["Taux d'abandon moyen"] if latest_week is not None else None
+    latest_week_panel = latest_week["Panel moyen"] if latest_week is not None else None
 
-    _write_card(trend_ws, "A32:C32", "A33:C34", "Dernier mois", str(latest_month_label), NAVY, SOFT_GREY, WHITE)
-    _write_card(
-        trend_ws,
-        "D32:F32",
-        "D33:F34",
-        "Conv. moyenne",
-        _format_percent(latest_month_conv),
-        DUO_BLUE,
-        SOFT_BLUE,
-        WHITE,
-    )
-    _write_card(
-        trend_ws,
-        "G32:I32",
-        "G33:I34",
-        "Score moyen",
-        _format_percent(latest_month_score),
-        DUO_GREEN,
-        SOFT_GREEN,
-        WHITE,
-    )
-    _write_card(
-        trend_ws,
-        "J32:L32",
-        "J33:L34",
-        "Churn moyen",
-        _format_percent(latest_month_churn),
-        "FF6B6B",
-        SOFT_RED,
-        WHITE,
-    )
-    _write_card(
-        trend_ws,
-        "M32:N32",
-        "M33:N34",
-        "Panel moyen",
-        _format_integer(latest_month_panel),
-        NAVY,
-        SOFT_GREY,
-        WHITE,
-    )
+    delta_xp = latest_week["Delta XP vs S-1"] if latest_week is not None else None
+    delta_conv = latest_week["Delta Conv. vs S-1"] if latest_week is not None else None
+    delta_abandon = latest_week["Delta Abandon vs S-1"] if latest_week is not None else None
+    delta_score = latest_week["Delta Score vs S-1"] if latest_week is not None else None
 
-    _write_card(
-        trend_ws,
-        "A36:F36",
-        "A37:F38",
-        "Δ Conv. vs M-1",
-        _format_points(latest_month_delta_conv) if pd.notna(latest_month_delta_conv) else "N/A",
-        "FF8A34",
-        SOFT_ORANGE,
-        WHITE,
-    )
-    trend_ws["A37"].font = Font(
-        name="Calibri",
-        size=16,
-        bold=True,
-        color=_delta_font_color(latest_month_delta_conv),
-    )
+    _write_card(trend_ws, "A33:C33", "A34:C35", "Semaine", str(latest_week_label), NAVY, SOFT_GREY, WHITE)
+    _write_card(trend_ws, "D33:F33", "D34:F35", "XP moyen / jour", _format_xp(latest_week_xp), DUO_BLUE, SOFT_BLUE, WHITE)
+    _write_card(trend_ws, "G33:I33", "G34:I35", "Conv. Super moy.", _format_percent(latest_week_conv), DUO_GREEN, SOFT_GREEN, WHITE)
+    _write_card(trend_ws, "J33:L33", "J34:L35", "Taux d'abandon moy.", _format_percent(latest_week_abandon), "FF6B6B", SOFT_RED, WHITE)
+    _write_card(trend_ws, "M33:N33", "M34:N35", "Panel moy.", _format_integer(latest_week_panel), NAVY, SOFT_GREY, WHITE)
 
-    _write_card(
-        trend_ws,
-        "G36:L36",
-        "G37:L38",
-        "Δ Score vs M-1",
-        _format_points(latest_month_delta_score) if pd.notna(latest_month_delta_score) else "N/A",
-        NAVY,
-        SOFT_BLUE,
-        WHITE,
-    )
-    trend_ws["G37"].font = Font(
-        name="Calibri",
-        size=16,
-        bold=True,
-        color=_delta_font_color(latest_month_delta_score),
-    )
+    _write_card(trend_ws, "A37:C37", "A38:C39", "Delta XP vs S-1", _format_xp_delta(delta_xp), "FF8A34", SOFT_ORANGE, WHITE)
+    trend_ws["A38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_xp))
+    _write_card(trend_ws, "D37:F37", "D38:F39", "Delta Conv. vs S-1", _format_points(delta_conv), DUO_BLUE, SOFT_BLUE, WHITE)
+    trend_ws["D38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_conv))
+    _write_card(trend_ws, "G37:I37", "G38:I39", "Delta Abandon vs S-1", _format_points(delta_abandon), "FF6B6B", SOFT_RED, WHITE)
+    trend_ws["G38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_abandon, positive_is_good=False))
+    _write_card(trend_ws, "J37:L37", "J38:L39", "Delta Score vs S-1", _format_points(delta_score), DUO_GREEN, SOFT_GREEN, WHITE)
+    trend_ws["J38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_score))
+    _write_card(trend_ws, "M37:N37", "M38:N39", "Semaines visibles", str(len(weekly_df)) if not weekly_df.empty else "0", NAVY, SOFT_GREY, WHITE)
 
-    _write_card(
-        trend_ws,
-        "M36:N36",
-        "M37:N38",
-        "Mois visibles",
-        str(len(monthly_df)) if not monthly_df.empty else "0",
-        NAVY,
-        SOFT_GREY,
-        WHITE,
-    )
+    trend_ws.merge_cells("A41:N41")
+    wow_insight = trend_ws["A41"]
+    wow_insight.value = _weekly_insight_text(latest_week)
+    wow_insight.fill = PatternFill("solid", start_color=SOFT_GREY, end_color=SOFT_GREY)
+    wow_insight.font = Font(name="Calibri", size=10, bold=True, color="444444")
+    wow_insight.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-    trend_ws.merge_cells("A40:N40")
-    monthly_table_title = trend_ws["A40"]
-    monthly_table_title.value = "Historique mensuel consolide"
-    monthly_table_title.fill = PatternFill("solid", start_color=SOFT_GREY, end_color=SOFT_GREY)
-    monthly_table_title.font = Font(name="Calibri", size=10, bold=True, color="333333")
-    monthly_table_title.alignment = Alignment(horizontal="center", vertical="center")
+    trend_ws.merge_cells("A43:N43")
+    weekly_table_title = trend_ws["A43"]
+    weekly_table_title.value = "Historique hebdomadaire consolide"
+    weekly_table_title.fill = PatternFill("solid", start_color=SOFT_GREY, end_color=SOFT_GREY)
+    weekly_table_title.font = Font(name="Calibri", size=10, bold=True, color="333333")
+    weekly_table_title.alignment = Alignment(horizontal="center", vertical="center")
 
-    monthly_headers = [
-        "Mois",
-        "Conv. Super moy.",
-        "Δ Conv. vs M-1",
-        "Score d'eng. moy.",
-        "Δ Score vs M-1",
-        "Churn moyen",
+    weekly_headers = [
+        "Semaine",
+        "Jours observes",
+        "XP moyen",
+        "Conv. Super",
+        "Taux d'abandon",
+        "Score d'eng.",
         "Panel moyen",
     ]
-    monthly_cols = ["A", "C", "E", "G", "I", "K", "M"]
-    for col, title_value in zip(monthly_cols, monthly_headers):
-        start = f"{col}42"
-        end = f"{chr(ord(col) + 1)}42"
+    weekly_cols = ["A", "C", "E", "G", "I", "K", "M"]
+    for col, title_value in zip(weekly_cols, weekly_headers):
+        start = f"{col}45"
+        end = f"{chr(ord(col) + 1)}45"
         trend_ws.merge_cells(f"{start}:{end}")
         cell = trend_ws[start]
         cell.value = title_value
         cell.fill = PatternFill("solid", start_color=SOFT_GREY, end_color=SOFT_GREY)
         cell.font = Font(name="Calibri", size=10, bold=True, color="333333")
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = Border(
-            left=Side(style="thin", color="D9D9D9"),
-            right=Side(style="thin", color="D9D9D9"),
-            top=Side(style="thin", color="D9D9D9"),
-            bottom=Side(style="thin", color="D9D9D9"),
-        )
+        cell.border = _build_border()
 
-    if not monthly_df.empty:
-        latest_month_index = len(monthly_df) - 1
-        for idx, row in enumerate(monthly_df.itertuples(index=False)):
-            offset = 43 + idx
-            conv = row[1]
-            delta_conv = row[2]
-            score = row[3]
-            delta_score = row[4]
-            churn = row[5]
-            panel = row[6]
+    if not weekly_df.empty:
+        latest_week_index = len(weekly_df) - 1
+        for idx, row in enumerate(weekly_df.itertuples(index=False)):
+            offset = 46 + idx
             values = [
                 row[0],
-                _format_percent(conv),
-                _format_points(delta_conv) if pd.notna(delta_conv) else "N/A",
-                _format_percent(score),
-                _format_points(delta_score) if pd.notna(delta_score) else "N/A",
-                _format_percent(churn),
-                _format_integer(panel),
+                str(int(row[1])) if not pd.isna(row[1]) else "N/A",
+                _format_xp(row[2]),
+                _format_percent(row[4]),
+                _format_percent(row[6]),
+                _format_percent(row[8]),
+                _format_integer(row[10]),
             ]
-            is_latest_month = idx == latest_month_index
-            base_fill = SOFT_BLUE if is_latest_month else (WHITE if offset % 2 else SOFT_GREY)
-            for col, value in zip(monthly_cols, values):
+            is_latest_week = idx == latest_week_index
+            base_fill = SOFT_BLUE if is_latest_week else (WHITE if offset % 2 else SOFT_GREY)
+            for col, value in zip(weekly_cols, values):
                 start = f"{col}{offset}"
                 end = f"{chr(ord(col) + 1)}{offset}"
                 trend_ws.merge_cells(f"{start}:{end}")
                 cell = trend_ws[start]
                 cell.value = value
-                cell.fill = PatternFill(
-                    "solid",
-                    start_color=base_fill,
-                    end_color=base_fill,
-                )
-                cell.font = Font(name="Calibri", size=10, bold=(col == "A" or is_latest_month), color="333333")
-                if col in {"E", "I"} and value != "N/A":
-                    num = delta_conv if col == "E" else delta_score
-                    color = _delta_font_color(num)
-                    cell.font = Font(name="Calibri", size=10, bold=True, color=color)
+                cell.fill = PatternFill("solid", start_color=base_fill, end_color=base_fill)
+                cell.font = Font(name="Calibri", size=10, bold=(col == "A" or is_latest_week), color="333333")
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                cell.border = Border(
-                    left=Side(style="thin", color="D9D9D9"),
-                    right=Side(style="thin", color="D9D9D9"),
-                    top=Side(style="thin", color="D9D9D9"),
-                    bottom=Side(style="thin", color="D9D9D9"),
-                )
+                cell.border = _build_border()
     else:
-        trend_ws.merge_cells("A43:N45")
-        empty_msg = trend_ws["A43"]
-        empty_msg.value = "Le comparatif mensuel apparaitra ici des qu'au moins un mois de resume sera disponible."
+        trend_ws.merge_cells("A46:N48")
+        empty_msg = trend_ws["A46"]
+        empty_msg.value = "Le comparatif Week over Week apparaitra ici des qu'au moins une semaine de resume sera disponible."
         empty_msg.font = Font(name="Calibri", size=10, italic=True, color="666666")
         empty_msg.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
