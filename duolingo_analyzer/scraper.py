@@ -20,6 +20,52 @@ from .config import (
 MAX_RETRIES = 2  # Nombre de tentatives supplémentaires en cas d'échec
 
 
+LOG_COLUMNS = ["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus", "HasMax"]
+LEGACY_LOG_COLUMNS = ["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus"]
+MAX_RETRIES = 2  # Nombre de tentatives supplémentaires en cas d'échec
+
+
+def _ensure_daily_log_schema() -> bool:
+    if not DAILY_LOG_FILE.exists():
+        return False
+
+    try:
+        with open(DAILY_LOG_FILE, "r", newline="", encoding="utf-8") as source:
+            rows = list(csv.reader(source))
+    except Exception:
+        return True
+
+    if not rows:
+        return True
+
+    header = rows[0]
+    if header == LOG_COLUMNS:
+        return True
+
+    if header != LEGACY_LOG_COLUMNS:
+        return True
+
+    upgraded_rows = [LOG_COLUMNS]
+    for row in rows[1:]:
+        if not row:
+            continue
+        if row == LEGACY_LOG_COLUMNS or row == LOG_COLUMNS:
+            continue
+        if len(row) == 6:
+            upgraded_rows.append(row + ["False"])
+        elif len(row) >= 7:
+            upgraded_rows.append(row[:7])
+        else:
+            upgraded_rows.append(row + [""] * (7 - len(row)))
+
+    with open(DAILY_LOG_FILE, "w", newline="", encoding="utf-8") as target:
+        writer = csv.writer(target)
+        writer.writerows(upgraded_rows)
+
+    print("  [MIGRATION] daily_streaks_log.csv converti au schema 7 colonnes (HasMax ajoute).")
+    return True
+
+
 def _recuperer_profil(username: str) -> dict | None:
     """
     Interroge l'API Duolingo pour récupérer le streak, l'XP total 
@@ -103,6 +149,8 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
     print("=" * 60 + "\n")
 
     fichier_existe = DAILY_LOG_FILE.exists()
+    if fichier_existe:
+        fichier_existe = _ensure_daily_log_schema()
     
     # 1. Identifier déjà traités
     deja_traites = set()
@@ -158,7 +206,7 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
     if not fichier_existe:
         with open(DAILY_LOG_FILE, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus", "HasMax"])
+            writer.writerow(LOG_COLUMNS)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_worker_task, u, i) for i, u in enumerate(utilisateurs_a_faire)]

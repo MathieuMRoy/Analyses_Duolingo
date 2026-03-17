@@ -2,6 +2,7 @@
 Partie 2 : Statistiques
 Calcule les statistiques d'engagement via Pandas.
 """
+import csv
 from datetime import datetime, timedelta
 from pathlib import Path
 import shutil
@@ -55,6 +56,7 @@ SUMMARY_COLUMN_ALIASES = {
     "Total Profils": "Panel Total",
     "Panel Total": "Panel Total",
 }
+DAILY_LOG_COLUMNS = ["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus", "HasMax"]
 
 
 def _parse_float(value: object) -> float | None:
@@ -106,6 +108,54 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
         normalized = normalized.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
 
     return normalized.reset_index(drop=True)
+
+
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    raw = str(value or "").strip().lower()
+    return raw in {"true", "1", "yes", "y", "vrai"}
+
+
+def _load_daily_log_df() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+
+    with open(DAILY_LOG_FILE, "r", encoding="utf-8", newline="") as source:
+        reader = csv.reader(source)
+        header = next(reader, None)
+        if header is None:
+            return pd.DataFrame(columns=DAILY_LOG_COLUMNS)
+
+        for row in reader:
+            if not row:
+                continue
+            if row == DAILY_LOG_COLUMNS or row[:6] == DAILY_LOG_COLUMNS[:6]:
+                continue
+
+            normalized_row = row[:]
+            if len(normalized_row) == 6:
+                normalized_row.append("False")
+            elif len(normalized_row) < 6:
+                continue
+            elif len(normalized_row) > 7:
+                normalized_row = normalized_row[:7]
+
+            if len(normalized_row) < 7:
+                normalized_row.extend([""] * (7 - len(normalized_row)))
+
+            rows.append(dict(zip(DAILY_LOG_COLUMNS, normalized_row)))
+
+    df = pd.DataFrame(rows, columns=DAILY_LOG_COLUMNS)
+    if df.empty:
+        return df
+
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df["Streak"] = pd.to_numeric(df["Streak"], errors="coerce").fillna(0)
+    df["TotalXP"] = pd.to_numeric(df["TotalXP"], errors="coerce").fillna(0)
+    df["HasPlus"] = df["HasPlus"].apply(_parse_bool)
+    df["HasMax"] = df["HasMax"].apply(_parse_bool)
+    df = df[df["Date"].notna()]
+    return df
 
 
 def _charger_resume_historique() -> pd.DataFrame | None:
@@ -176,7 +226,7 @@ def calculer_statistiques() -> dict | None:
         return None
 
     try:
-        df = pd.read_csv(DAILY_LOG_FILE)
+        df = _load_daily_log_df()
     except Exception as e:
         print(f"  ❌ Erreur de lecture du CSV : {e}")
         return None
@@ -317,7 +367,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
 
     try:
         # Lire les données brutes
-        df = pd.read_csv(DAILY_LOG_FILE)
+        df = _load_daily_log_df()
         aujourdhui = stats.get("date_jour")
         df_jour = df[df["Date"] == aujourdhui] if aujourdhui else pd.DataFrame()
 
