@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from math import ceil, floor
 from datetime import datetime
@@ -104,6 +104,7 @@ def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
                 "Apprentissage (XP/j)",
                 "Taux Abonn. Super",
                 "Taux d'Abandon Global",
+                "Reactivations vs Veille",
                 "Score d'Engagement",
                 "Panel Total",
                 "Abandon Debutants",
@@ -123,6 +124,7 @@ def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
         "Apprentissage (XP/j)": ["Apprentissage (XP/j)", "Delta XP (Intensit\u00e9)"],
         "Taux Abonn. Super": ["Taux Abonn. Super", "Conversion Premium"],
         "Taux d'Abandon Global": ["Taux d'Abandon Global", "Taux d'Attrition Global", "Churn Global"],
+        "Reactivations vs Veille": ["Reactivations vs Veille"],
         "Score d'Engagement": ["Score d'Engagement", "Score Sant\u00e9 Global"],
         "Panel Total": ["Panel Total", "Total Profils"],
         "Abandon Debutants": ["Abandon D\u00e9butants", "Churn D\u00e9butants"],
@@ -348,6 +350,7 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
         "active_users": active_users,
         "engagement_score": engagement_score,
         "avg_streak": avg_streak,
+        "reactivated_users": None,
         "abandon_global": None,
         "retention_rate": None,
         "abandon_debutants": None,
@@ -368,6 +371,7 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
     )
     if merged.empty:
         return snapshot
+    snapshot["reactivated_users"] = int(((merged["Streak_prev"] == 0) & (merged["Streak_curr"] > 0)).sum())
 
     dropped_mask = (merged["Streak_prev"] > 0) & (merged["Streak_curr"] == 0)
     active_prev = int((merged["Streak_prev"] > 0).sum())
@@ -416,6 +420,7 @@ def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, fl
         "panel_total": panel_total,
         "active_users": active_users,
         "engagement_score": engagement_score,
+        "reactivated_users": _parse_float(latest.get("Reactivations vs Veille")),
         "avg_streak": _parse_float(latest.get("Serie Moyenne (Jours)")),
         "abandon_global": _parse_float(latest.get("Taux d'Abandon Global")),
         "retention_rate": None,
@@ -666,11 +671,11 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         SOFT_GREEN,
         WHITE,
     )
-
     trend_ws.merge_cells("A9:N9")
     daily_line = trend_ws["A9"]
     daily_line.value = (
         f"Taux d'abandon global : {_format_percent(daily_snapshot.get('abandon_global'))}"
+        f"   |   Reactivations vs veille : {_format_integer(daily_snapshot.get('reactivated_users'))}"
         f"   |   Retention vs hier : {_format_percent(daily_snapshot.get('retention_rate'))}"
         f"   |   Serie moyenne : {_format_streak(daily_snapshot.get('avg_streak'))}"
     )

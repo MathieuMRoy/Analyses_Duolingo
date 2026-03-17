@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 240
     permissions:
       contents: read
     env:
@@ -90,3 +90,4 @@ jobs:
           path: |
             rapports_donnees/rapport_historique.xlsx
             daily_streaks_log.csv
+

@@ -23,6 +23,7 @@ SUMMARY_COLUMNS = [
     "Taux Abonn. Super",
     "Taux Abonn. Max",
     "Taux d'Abandon Global",
+    "Reactivations vs Veille",
     "Abandon DÃ©butants",
     "Abandon Standard",
     "Abandon Super-Actifs",
@@ -43,6 +44,7 @@ SUMMARY_COLUMN_ALIASES = {
     "Churn Global": "Taux d'Abandon Global",
     "Taux d'Abandon Global": "Taux d'Abandon Global",
     "Taux d'Attrition Global": "Taux d'Abandon Global",
+    "Reactivations vs Veille": "Reactivations vs Veille",
     "Churn DÃ©butants": "Abandon DÃ©butants",
     "Abandon DÃ©butants": "Abandon DÃ©butants",
     "Churn Standard": "Abandon Standard",
@@ -253,9 +255,10 @@ def calculer_statistiques() -> dict | None:
         "moyenne_streak_hier": None,
         "utilisateurs_actifs": 0,
         "streaks_tombes_zero": 0,
+        "reactivations_veille": 0,
         "nb_profils_jour": len(df_jour),
         "nb_profils_hier": len(df_hier),
-        "taux_conversion_plus": 0.0,
+        "taux_conversion_plus": None,
         "taux_conversion_max": None,
         "delta_xp_moyen": 0.0,
         "cohortes": {
@@ -270,15 +273,15 @@ def calculer_statistiques() -> dict | None:
         stats["utilisateurs_actifs"] = len(df_jour[df_jour["Streak"] > 0])
         stats["score_sante_jour"] = (stats["utilisateurs_actifs"] / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
         
-        # Taux de Conversion Super & Max (MonÃ©tisation)
-        if "HasPlus" in df_jour.columns:
-            abonnes_plus = len(df_jour[df_jour["HasPlus"] == True])
-            stats["taux_conversion_plus"] = (abonnes_plus / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
-        
-        if "HasMax" in df_jour.columns:
+        # Taux de Conversion Super & Max (Monetisation)
+        has_max_reliable = ("HasMax" in df_jour.columns) and bool(df_jour["HasMax"].eq(True).any())
+
+        if has_max_reliable:
             abonnes_max = len(df_jour[df_jour["HasMax"] == True])
-            if abonnes_max > 0:
-                stats["taux_conversion_max"] = (abonnes_max / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
+            abonnes_super = len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)]) if "HasPlus" in df_jour.columns else 0
+            stats["taux_conversion_max"] = (abonnes_max / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
+            stats["taux_conversion_plus"] = (abonnes_super / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
+
             
         # Remplissage initial des cohortes du jour
         if "Cohort" in df_jour.columns:
@@ -306,6 +309,8 @@ def calculer_statistiques() -> dict | None:
             (merged["Streak_hier"] > 0) & (merged["Streak_jour"] == 0)
         ]
         stats["streaks_tombes_zero"] = len(tombes_a_zero)
+        reactivated_mask = (merged["Streak_hier"] == 0) & (merged["Streak_jour"] > 0)
+        stats["reactivations_veille"] = int(reactivated_mask.sum())
         
         actifs_hier = len(df_hier[df_hier["Streak"] > 0])
         stats["taux_retention"] = ((actifs_hier - stats["streaks_tombes_zero"]) / actifs_hier * 100) if actifs_hier > 0 else 0
@@ -336,11 +341,13 @@ def calculer_statistiques() -> dict | None:
         print(f"     â€¢ IntensitÃ© d'Apprentissage : +{stats['delta_xp_moyen']:.0f} XP/jour")
     
     print(f"     â€¢ Utilisateurs Actifs : {stats['utilisateurs_actifs']}")
-    print(f"     â€¢ PÃ©nÃ©tration Super Duolingo : {stats['taux_conversion_plus']:.1f}%")
+    taux_super = stats.get("taux_conversion_plus")
     taux_max = stats.get("taux_conversion_max")
+    print(f"     â€¢ PÃ©nÃ©tration Super Duolingo : {f'{taux_super:.1f}%' if isinstance(taux_super, numbers.Number) else 'N/D'}")
     print(f"     â€¢ PÃ©nÃ©tration Duolingo Max    : {f'{taux_max:.1f}%' if isinstance(taux_max, numbers.Number) else 'N/D'}")
     print(f"     â€¢ Ruptures de SÃ©rie (abandons) : {stats['streaks_tombes_zero']}")
     print(f"     â€¢ Taux d'Abandon Global : {stats.get('taux_churn', 0):.1f}%")
+    print(f"     â€¢ Reactivations vs veille : {stats.get('reactivations_veille', 0)}")
     
     print(f"\n     â€¢ Analyse par Segment (Cohorte) :")
     for nom, donnees in stats["cohortes"].items():
@@ -393,9 +400,10 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 "SÃ©rie Moyenne (Jours)": moyenne_streak_jour,
                 "Ã‰vol. vs Veille": delta_streak,
                 "Apprentissage (XP/j)": round(stats.get('delta_xp_moyen', 0), 0),
-                "Taux Abonn. Super": round(stats.get('taux_conversion_plus', 0), 1),
+                "Taux Abonn. Super": round(stats["taux_conversion_plus"], 1) if isinstance(stats.get("taux_conversion_plus"), numbers.Number) else None,
                 "Taux Abonn. Max": round(stats["taux_conversion_max"], 1) if isinstance(stats.get("taux_conversion_max"), numbers.Number) else None,
                 "Taux d'Abandon Global": round(stats.get('taux_churn', 0), 2),
+                "Reactivations vs Veille": stats.get("reactivations_veille", 0),
                 "Abandon DÃ©butants": round(stats.get('cohortes', {}).get('Debutants', {}).get('churn', 0), 1),
                 "Abandon Standard": round(stats.get('cohortes', {}).get('Standard', {}).get('churn', 0), 1),
                 "Abandon Super-Actifs": round(stats.get('cohortes', {}).get('Super-Actifs', {}).get('churn', 0), 1),
@@ -439,6 +447,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 {"KPI": "Taux Abonn. Super", "DÃ©finition": "Pourcentage d'utilisateurs possÃ©dant un abonnement 'Super Duolingo' (hasPlus)."},
                 {"KPI": "Taux Abonn. Max", "DÃ©finition": "Pourcentage d'utilisateurs possÃ©dant un abonnement 'Duolingo Max' (AI features)."},
                 {"KPI": "Taux d'Abandon Global", "DÃ©finition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombe a 0)."},
+                {"KPI": "Reactivations vs Veille", "DÃ©finition": "Nombre d'utilisateurs inactifs hier (streak a 0) redevenus actifs aujourd'hui."},
                 {"KPI": "Abandon DÃ©butants", "DÃ©finition": "Taux d'abandon spÃ©cifique aux utilisateurs ayant moins de 1000 XP au total."},
                 {"KPI": "Abandon Standard", "DÃ©finition": "Taux d'abandon spÃ©cifique aux utilisateurs ayant entre 1000 et 5000 XP."},
                 {"KPI": "Abandon Super-Actifs", "DÃ©finition": "Taux d'abandon spÃ©cifique Ã  l'Ã©lite ayant plus de 5000 XP."},
@@ -546,6 +555,8 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
         DUO_BLUE  = "1CB0F6"    # Bleu Duolingo
         NAVY      = "1F4E78"    # Bleu Marine Pro
         LIGHT_GREY= "F2F2F2"    # ZÃ©brures
+        GREEN_SOFT= "E2F0D9"    # Situation saine
+        AMBER_SOFT= "FFF2CC"    # A surveiller
         RED_SOFT  = "FFC7CE"    # Alerte
         WHITE     = "FFFFFF"
         
@@ -554,6 +565,8 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
         header_fill = PatternFill(start_color=NAVY, end_color=NAVY, fill_type="solid")
         header_font = Font(name=BASE_FONT_NAME, color=WHITE, bold=True, size=11)
         zebra_fill  = PatternFill(start_color=LIGHT_GREY, end_color=LIGHT_GREY, fill_type="solid")
+        success_fill= PatternFill(start_color=GREEN_SOFT, end_color=GREEN_SOFT, fill_type="solid")
+        warning_fill= PatternFill(start_color=AMBER_SOFT, end_color=AMBER_SOFT, fill_type="solid")
         alert_fill  = PatternFill(start_color=RED_SOFT, end_color=RED_SOFT, fill_type="solid")
         base_font   = Font(name=BASE_FONT_NAME, size=11, color="000000")
         
@@ -738,7 +751,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                     is_percent = ("%" in str(header_value)) or any(k in header_key for k in ["taux", "attrition", "abandon", "score", "pÃ©nÃ©tration", "penetration"])
                     is_xp = "xp" in header_key
                     is_streak = ("sÃ©rie" in header_key) or ("serie" in header_key) or ("streak" in header_key)
-                    is_panel = any(k in header_key for k in ["panel", "total", "profils", "actifs"])
+                    is_panel = any(k in header_key for k in ["panel", "total", "profils", "actifs", "reactiv"])
 
                     # Nettoyer les NaN
                     if isinstance(cell.value, numbers.Number) and cell.value != cell.value:
@@ -791,10 +804,20 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                     # Mise en forme conditionnelle spÃ©cifique (attrition/churn)
                     if "RÃ©sumÃ© Financier" in sheet_name and any(k in header_key for k in ["attrition", "abandon", "churn"]):
                         try:
-                            if float(cell.value) > 0:
+                            metric_value = float(cell.value)
+                            if metric_value <= 2:
+                                cell.fill = success_fill
+                            elif metric_value <= 5:
+                                cell.fill = warning_fill
+                            else:
                                 cell.fill = alert_fill
                         except: pass
-
+                    elif "RÃ©sumÃ© Financier" in sheet_name and "reactiv" in header_key:
+                        try:
+                            if float(cell.value) > 0:
+                                cell.fill = success_fill
+                                cell.font = Font(name=BASE_FONT_NAME, size=11, color="008000", bold=True)
+                        except: pass
             # Auto-ajustement des colonnes
             for col in ws.columns:
                 max_length = 0
