@@ -18,6 +18,24 @@ GLOSSAIRE_SHEET = "📖 Dictionnaire des KPIs"
 TRENDS_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Données Graphique"
 
+PERCENT_COLUMNS = {
+    "Taux Abonn. Super",
+    "Taux Abonn. Max",
+    "Taux d'Abandon Global",
+    "Abandon Débutants",
+    "Abandon Standard",
+    "Abandon Super-Actifs",
+    "Score d'Engagement",
+}
+
+BAD_SHEET_NAMES = {
+    "ðŸ“Š RÃ©sumÃ© Financier Q1",
+    "ðŸ¤– Analyse StratÃ©gique",
+    "ðŸ“– Dictionnaire des KPIs",
+    "ðŸ“ˆ Tendances Mensuelles",
+    "ðŸ“Š DonnÃ©es Graphique",
+}
+
 SUMMARY_COLUMNS = [
     "Date",
     "Série Moyenne (Jours)",
@@ -93,6 +111,7 @@ def _parse_float(value: object) -> float | None:
 def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     normalized = pd.DataFrame(index=df.index)
+
     for column in SUMMARY_COLUMNS:
         normalized[column] = pd.Series(index=df.index, dtype="object")
 
@@ -102,10 +121,16 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         source_series = df[source_column]
+
         if target_column == "Date":
             parsed_series = pd.to_datetime(source_series, errors="coerce")
         else:
             parsed_series = source_series.apply(_parse_float)
+
+            if target_column in PERCENT_COLUMNS:
+                parsed_series = parsed_series.apply(
+                    lambda x: (x / 100) if isinstance(x, numbers.Number) and abs(x) > 1 else x
+                )
 
         fill_mask = normalized[target_column].isna()
         normalized.loc[fill_mask, target_column] = parsed_series[fill_mask]
@@ -166,7 +191,6 @@ def _load_daily_log_df() -> pd.DataFrame:
 
 
 def _charger_resume_historique() -> pd.DataFrame | None:
-    # 1) Si le fichier historique existe, on l'utilise
     if RAPPORT_EXCEL_FILE.exists():
         try:
             df_resume = pd.read_excel(RAPPORT_EXCEL_FILE, sheet_name=SUMMARY_SHEET)
@@ -175,7 +199,6 @@ def _charger_resume_historique() -> pd.DataFrame | None:
         except Exception:
             pass
 
-    # 2) Sinon, on tente de reconstruire l'historique à partir des anciens rapports journaliers
     try:
         daily_reports = sorted(REPORT_DIR.glob("rapport_*.xlsx"))
     except Exception:
@@ -194,6 +217,7 @@ def _charger_resume_historique() -> pd.DataFrame | None:
 
     if not frames:
         return None
+
     df_resume = pd.concat(frames, ignore_index=True)
     return _normalize_summary_df(df_resume)
 
@@ -242,10 +266,12 @@ def calculer_statistiques() -> dict | None:
         print("  ⚠️ Le fichier est vide.")
         return None
 
-    # --- NETTOYAGE DES DONNÉES ---
-    # On ignore les lignes d'agrégation "Aggregated" qui peuvent polluer les calculs bruts
     df = df[~df["Username"].str.contains("Aggregated", na=False)]
     df = df[df["Cohort"] != "Global"]
+
+    # Un seul enregistrement par utilisateur par jour
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df = df.sort_values(["Date", "Username"]).drop_duplicates(subset=["Date", "Username"], keep="last")
 
     now_local = now_toronto()
     aujourdhui = now_local.strftime("%Y-%m-%d")
@@ -275,21 +301,20 @@ def calculer_statistiques() -> dict | None:
     }
 
     if not df_jour.empty:
-        stats["moyenne_streak_jour"] = df_jour["Streak"].mean()
-        stats["utilisateurs_actifs"] = len(df_jour[df_jour["Streak"] > 0])
+        stats["moyenne_streak_jour"] = float(df_jour["Streak"].mean())
+        stats["utilisateurs_actifs"] = int(len(df_jour[df_jour["Streak"] > 0]))
         stats["score_sante_jour"] = (
             (stats["utilisateurs_actifs"] / stats["nb_profils_jour"]) * 100
             if stats["nb_profils_jour"] > 0
             else 0
         )
 
-        # Taux de conversion Super & Max (monétisation)
         has_max_reliable = ("HasMax" in df_jour.columns) and bool(df_jour["HasMax"].eq(True).any())
 
         if has_max_reliable:
-            abonnes_max = len(df_jour[df_jour["HasMax"] == True])
+            abonnes_max = int(len(df_jour[df_jour["HasMax"] == True]))
             abonnes_super = (
-                len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)])
+                int(len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)]))
                 if "HasPlus" in df_jour.columns
                 else 0
             )
@@ -300,37 +325,36 @@ def calculer_statistiques() -> dict | None:
                 (abonnes_super / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
             )
 
-        # Remplissage initial des cohortes du jour
         if "Cohort" in df_jour.columns:
             for cohorte in stats["cohortes"].keys():
                 df_c = df_jour[df_jour["Cohort"] == cohorte]
-                stats["cohortes"][cohorte]["total"] = len(df_c)
-                stats["cohortes"][cohorte]["actifs"] = len(df_c[df_c["Streak"] > 0])
+                stats["cohortes"][cohorte]["total"] = int(len(df_c))
+                stats["cohortes"][cohorte]["actifs"] = int(len(df_c[df_c["Streak"] > 0]))
 
     if not df_hier.empty and not df_jour.empty:
-        stats["moyenne_streak_hier"] = df_hier["Streak"].mean()
+        stats["moyenne_streak_hier"] = float(df_hier["Streak"].mean())
 
         merged = df_hier.merge(
             df_jour,
             on="Username",
             suffixes=("_hier", "_jour"),
+            how="inner",
         )
 
-        # Calcul du Delta XP (Intensité)
         if "TotalXP_hier" in merged.columns and "TotalXP_jour" in merged.columns:
             merged["Delta_XP"] = merged["TotalXP_jour"] - merged["TotalXP_hier"]
-            merged.loc[merged["Delta_XP"] < 0, "Delta_XP"] = 0  # Ignore les bugs d'API où l'XP baisse
-            stats["delta_xp_moyen"] = merged["Delta_XP"].mean()
+            merged.loc[merged["Delta_XP"] < 0, "Delta_XP"] = 0
+            stats["delta_xp_moyen"] = float(merged["Delta_XP"].mean()) if not merged.empty else 0.0
 
         tombes_a_zero = merged[
             (merged["Streak_hier"] > 0) & (merged["Streak_jour"] == 0)
         ]
-        stats["streaks_tombes_zero"] = len(tombes_a_zero)
+        stats["streaks_tombes_zero"] = int(len(tombes_a_zero))
 
         reactivated_mask = (merged["Streak_hier"] == 0) & (merged["Streak_jour"] > 0)
         stats["reactivations_veille"] = int(reactivated_mask.sum())
 
-        actifs_hier = len(df_hier[df_hier["Streak"] > 0])
+        actifs_hier = int(len(df_hier[df_hier["Streak"] > 0]))
         stats["taux_retention"] = (
             ((actifs_hier - stats["streaks_tombes_zero"]) / actifs_hier * 100)
             if actifs_hier > 0
@@ -342,7 +366,6 @@ def calculer_statistiques() -> dict | None:
             else 0
         )
 
-        # Calcul churn/rétention par cohorte
         if "Cohort_jour" in merged.columns:
             for cohorte in stats["cohortes"].keys():
                 merged_c = merged[merged["Cohort_jour"] == cohorte]
@@ -350,12 +373,12 @@ def calculer_statistiques() -> dict | None:
                     (merged_c["Streak_hier"] > 0) & (merged_c["Streak_jour"] == 0)
                 ]
                 actifs_hier_c = (
-                    len(df_hier[(df_hier["Cohort"] == cohorte) & (df_hier["Streak"] > 0)])
+                    int(len(df_hier[(df_hier["Cohort"] == cohorte) & (df_hier["Streak"] > 0)]))
                     if "Cohort" in df_hier.columns
                     else 0
                 )
 
-                stats["cohortes"][cohorte]["tombes_zero"] = len(tombes_c)
+                stats["cohortes"][cohorte]["tombes_zero"] = int(len(tombes_c))
                 if actifs_hier_c > 0:
                     stats["cohortes"][cohorte]["churn"] = (len(tombes_c) / actifs_hier_c) * 100
                     stats["cohortes"][cohorte]["retention"] = (
@@ -365,6 +388,7 @@ def calculer_statistiques() -> dict | None:
         print("  ⚠️ Aucune donnée pour hier — comparaison impossible.\n")
         stats["taux_retention"] = 0
         stats["taux_churn"] = 0
+        stats["score_sante_jour"] = stats.get("score_sante_jour", 0)
 
     print(f"  📊 Statistiques du {aujourdhui} :")
     print(f"     • Série Moyenne (Streak) : {stats['moyenne_streak_jour']:.1f} j")
@@ -410,10 +434,11 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
         return
 
     try:
-        # Lire les données brutes
         df = _load_daily_log_df()
-        aujourdhui = stats.get("date_jour")
-        df_jour = df[df["Date"] == aujourdhui] if aujourdhui else pd.DataFrame()
+        df = df[~df["Username"].str.contains("Aggregated", na=False)]
+        df = df[df["Cohort"] != "Global"]
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        df = df.sort_values(["Date", "Username"]).drop_duplicates(subset=["Date", "Username"], keep="last")
 
         date_jour = stats.get("date_jour")
         date_obj = None
@@ -429,24 +454,24 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
         if moyenne_streak_hier is not None:
             delta_streak = round(moyenne_streak_jour - moyenne_streak_hier, 1)
 
-        # Créer la ligne du jour
         df_stats = pd.DataFrame([{
             "Date": date_obj or date_jour,
             "Série Moyenne (Jours)": moyenne_streak_jour,
             "Évol. vs Veille": delta_streak,
             "Apprentissage (XP/j)": round(stats.get("delta_xp_moyen", 0), 0),
-            "Taux Abonn. Super": round(stats["taux_conversion_plus"], 1) if isinstance(stats.get("taux_conversion_plus"), numbers.Number) else None,
-            "Taux Abonn. Max": round(stats["taux_conversion_max"], 1) if isinstance(stats.get("taux_conversion_max"), numbers.Number) else None,
-            "Taux d'Abandon Global": round(stats.get("taux_churn", 0), 2),
+            "Taux Abonn. Super": round(stats["taux_conversion_plus"] / 100, 6)
+                if isinstance(stats.get("taux_conversion_plus"), numbers.Number) else None,
+            "Taux Abonn. Max": round(stats["taux_conversion_max"] / 100, 6)
+                if isinstance(stats.get("taux_conversion_max"), numbers.Number) else None,
+            "Taux d'Abandon Global": round(stats.get("taux_churn", 0) / 100, 6),
             "Reactivations vs Veille": stats.get("reactivations_veille", 0),
-            "Abandon Débutants": round(stats.get("cohortes", {}).get("Debutants", {}).get("churn", 0), 1),
-            "Abandon Standard": round(stats.get("cohortes", {}).get("Standard", {}).get("churn", 0), 1),
-            "Abandon Super-Actifs": round(stats.get("cohortes", {}).get("Super-Actifs", {}).get("churn", 0), 1),
-            "Score d'Engagement": round(stats.get("score_sante_jour", 0), 1),
+            "Abandon Débutants": round(stats.get("cohortes", {}).get("Debutants", {}).get("churn", 0) / 100, 6),
+            "Abandon Standard": round(stats.get("cohortes", {}).get("Standard", {}).get("churn", 0) / 100, 6),
+            "Abandon Super-Actifs": round(stats.get("cohortes", {}).get("Super-Actifs", {}).get("churn", 0) / 100, 6),
+            "Score d'Engagement": round(stats.get("score_sante_jour", 0) / 100, 6),
             "Panel Total": stats.get("nb_profils_jour"),
         }])
 
-        # Charger l'historique existant et y ajouter la ligne du jour
         df_resume = _charger_resume_historique()
         if df_resume is None or df_resume.empty:
             df_resume = df_stats.copy()
@@ -466,16 +491,12 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
         writer_mode = "a" if RAPPORT_EXCEL_FILE.exists() else "w"
         writer_kwargs = {"if_sheet_exists": "replace"} if writer_mode == "a" else {}
 
-        # Créer un ExcelWriter
         with pd.ExcelWriter(RAPPORT_EXCEL_FILE, engine="openpyxl", mode=writer_mode, **writer_kwargs) as writer:
-            # 1. RÉSUMÉ STATISTIQUES
             df_resume.to_excel(writer, sheet_name=SUMMARY_SHEET, index=False)
 
-            # 2. ANALYSE IA
             if ia_report:
                 pd.DataFrame().to_excel(writer, sheet_name=AI_SHEET, index=False)
 
-            # 3. GLOSSAIRE DES KPIs
             df_glossaire = pd.DataFrame([
                 {"KPI": "Moyenne Streak (J)", "Définition": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité à long terme."},
                 {"KPI": "Apprentissage (XP/j)", "Définition": "Gain moyen de points d'expérience (XP) depuis hier. Mesure l'effort d'apprentissage quotidien."},
@@ -490,24 +511,19 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
             ])
             df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
 
-        # --- Post-traitement : styles premium avec openpyxl ---
         from openpyxl import load_workbook
 
-        # --- CALCUL DES TENDANCES MENSUELLES ---
         try:
-            df_cleaned = df[~df["Username"].str.contains("Aggregated", na=False)].copy()
-            df_cleaned = df_cleaned[df_cleaned["Cohort"] != "Global"]
-
+            df_cleaned = df.copy()
             df_cleaned["Month"] = pd.to_datetime(df_cleaned["Date"]).dt.to_period("M").astype(str)
 
-            # Calculer le delta XP quotidien d'abord pour pouvoir l'agréger
             df_sorted = df_cleaned.sort_values(["Username", "Date"])
             df_sorted["Prev_XP"] = df_sorted.groupby("Username")["TotalXP"].shift(1)
             df_sorted["Daily_Delta"] = df_sorted["TotalXP"] - df_sorted["Prev_XP"]
             df_sorted.loc[df_sorted["Daily_Delta"] < 0, "Daily_Delta"] = 0
 
-            # 1. Calculer les moyennes par cohorte
             cohort_column = "Cohorte" if "Cohorte" in df_sorted.columns else "Cohort"
+
             monthly_cohorts = df_sorted.groupby(["Month", cohort_column]).agg({
                 "Streak": "mean",
                 "HasPlus": "mean",
@@ -515,7 +531,6 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
             }).reset_index()
             monthly_cohorts.columns = ["Mois", "Cohorte", "Série Moy. (j)", "Taux Super (%)", "Activité (XP/j)"]
 
-            # 2. Calculer le poids global
             monthly_global = df_sorted.groupby(["Month"]).agg({
                 "Streak": "mean",
                 "HasPlus": "mean",
@@ -525,18 +540,17 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
             monthly_global = monthly_global[["Month", "Cohorte", "Streak", "HasPlus", "Daily_Delta"]]
             monthly_global.columns = ["Mois", "Cohorte", "Série Moy. (j)", "Taux Super (%)", "Activité (XP/j)"]
 
-            # Fusionner les deux
             monthly_stats = pd.concat([monthly_cohorts, monthly_global], ignore_index=True)
             monthly_stats = monthly_stats.sort_values(["Cohorte", "Mois"])
 
-            # 3. Calculer les deltas MoM
             for col in ["Série Moy. (j)", "Taux Super (%)", "Activité (XP/j)"]:
                 new_col = f"Δ {col} (MoM)"
                 monthly_stats[new_col] = monthly_stats.groupby("Cohorte")[col].diff()
 
             monthly_stats = monthly_stats.sort_values(["Mois", "Cohorte"])
-            monthly_stats["Taux Super (%)"] *= 100
-            monthly_stats["Δ Taux Super (%) (MoM)"] *= 100
+            monthly_stats["Taux Super (%)"] = monthly_stats["Taux Super (%)"].round(6)
+            monthly_stats["Δ Taux Super (%) (MoM)"] = monthly_stats["Δ Taux Super (%) (MoM)"].round(6)
+
         except Exception as e:
             print(f"  ⚠️ Erreur calcul mensuel : {e}")
             monthly_stats = pd.DataFrame()
@@ -545,9 +559,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
             if not monthly_stats.empty:
                 monthly_stats.to_excel(writer, sheet_name=TRENDS_SHEET, index=False)
 
-            # --- 4. DONNÉES POUR LE GRAPHIQUE (Daily Premium Conversion) ---
             try:
-                # Filtrage : on ne garde que les dates avec > 1000 utilisateurs pour éviter le bruit
                 date_counts = df.groupby("Date").size()
                 valid_dates = date_counts[date_counts > 1000].index
                 df_filtered = df[df["Date"].isin(valid_dates)]
@@ -555,10 +567,10 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 if df_filtered.empty:
                     df_filtered = df
 
-                # Calcul conversion journalière par cohorte
                 df_daily_conv = df_filtered.groupby(["Date", "Cohort"])["HasPlus"].mean().unstack() * 100
                 df_daily_conv["Global"] = df_filtered.groupby("Date")["HasPlus"].mean() * 100
                 df_daily_conv = df_daily_conv.reset_index()
+
                 numeric_cols = df_daily_conv.select_dtypes(include="number").columns
                 df_daily_conv[numeric_cols] = df_daily_conv[numeric_cols].round(1)
 
@@ -577,12 +589,16 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 df_daily_conv["Date"] = pd.to_datetime(df_daily_conv["Date"], errors="coerce")
 
                 df_daily_conv.to_excel(writer, sheet_name=CHART_DATA_SHEET, index=False)
+
             except Exception as e:
                 print(f"  ⚠️ Erreur préparation données graphique : {e}")
 
         wb = load_workbook(RAPPORT_EXCEL_FILE)
 
-        # --- Palette de couleurs ---
+        for bad_name in BAD_SHEET_NAMES:
+            if bad_name in wb.sheetnames:
+                del wb[bad_name]
+
         DUO_GREEN = "58CC02"
         DUO_BLUE = "1CB0F6"
         NAVY = "1F4E78"
@@ -592,7 +608,6 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
         RED_SOFT = "FFC7CE"
         WHITE = "FFFFFF"
 
-        # --- Styles de base ---
         BASE_FONT_NAME = "Calibri"
         header_fill = PatternFill(start_color=NAVY, end_color=NAVY, fill_type="solid")
         header_font = Font(name=BASE_FONT_NAME, color=WHITE, bold=True, size=11)
@@ -616,7 +631,6 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
             ws = wb[sheet_name]
             ws.sheet_view.showGridLines = False
 
-            # --- 1. SPECIAL : ANALYSE IA ---
             if sheet_name == AI_SHEET:
                 sections = {
                     "TITRE": "Tableau de Bord Stratégique",
@@ -625,6 +639,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                     "ATTENTION": "-",
                     "CONSEILS": "-",
                 }
+
                 if ia_report:
                     import re
                     for key in sections.keys():
@@ -693,7 +708,6 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                 ws.sheet_view.showGridLines = False
                 continue
 
-            # --- 2. SPECIAL : GRAPHIQUE DE CONVERSION ---
             if sheet_name == TRENDS_SHEET:
                 try:
                     data_ws = wb[CHART_DATA_SHEET]
@@ -744,10 +758,10 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
 
                     ws.add_chart(chart, "J2")
                     data_ws.sheet_state = "hidden"
+
                 except Exception as e:
                     print(f"  ⚠️ Erreur ajout graphique : {e}")
 
-            # --- 3. TABLES DE DONNÉES ---
             ws.row_dimensions[1].height = 22
             for cell in ws[1]:
                 cell.fill = header_fill
@@ -761,6 +775,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                     cell.border = thin_border
                     header_value = ws.cell(1, cell.column).value
                     header_key = str(header_value).strip().lower() if header_value is not None else ""
+
                     is_delta = ("Δ" in str(header_value)) or ("delta" in header_key) or ("evol" in header_key)
                     is_percent = ("%" in str(header_value)) or any(
                         k in header_key for k in ["taux", "attrition", "abandon", "score", "pénétration", "penetration"]
@@ -776,14 +791,21 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                         cell.alignment = center_align
                         cell.font = base_font
                         cell.number_format = "yyyy-mm-dd"
+
                     elif isinstance(cell.value, numbers.Number):
                         cell.alignment = center_align
                         cell.font = base_font
 
                         if is_delta and is_percent:
-                            cell.number_format = '+0.0"%" ;-0.0"%" ;0.0"%"'
+                            if sheet_name == CHART_DATA_SHEET:
+                                cell.number_format = '+0.0"%" ;-0.0"%" ;0.0"%"'
+                            else:
+                                cell.number_format = "+0.0%;-0.0%;0.0%"
                         elif is_percent:
-                            cell.number_format = '0.0"%"'
+                            if sheet_name == CHART_DATA_SHEET:
+                                cell.number_format = '0.0"%"'
+                            else:
+                                cell.number_format = "0.0%"
                         elif is_delta and is_xp:
                             cell.number_format = '+#,##0" XP";-#,##0" XP";0" XP"'
                         elif is_xp:
@@ -800,10 +822,12 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                                 cell.font = Font(name=BASE_FONT_NAME, size=11, color="008000", bold=True)
                             elif cell.value < 0:
                                 cell.font = Font(name=BASE_FONT_NAME, size=11, color="C00000", bold=True)
+
                     elif cell.value is None and is_delta:
                         cell.value = "N/A"
                         cell.alignment = center_align
                         cell.font = base_font
+
                     else:
                         cell.alignment = left_align
                         cell.font = base_font
@@ -816,14 +840,15 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
                     if sheet_name == SUMMARY_SHEET and any(k in header_key for k in ["attrition", "abandon", "churn"]):
                         try:
                             metric_value = float(cell.value)
-                            if metric_value <= 2:
+                            if metric_value <= 0.02:
                                 cell.fill = success_fill
-                            elif metric_value <= 5:
+                            elif metric_value <= 0.05:
                                 cell.fill = warning_fill
                             else:
                                 cell.fill = alert_fill
                         except Exception:
                             pass
+
                     elif sheet_name == SUMMARY_SHEET and "reactiv" in header_key:
                         try:
                             if float(cell.value) > 0:
