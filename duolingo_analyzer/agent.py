@@ -85,9 +85,11 @@ def _build_financial_signal_prompt(
     if quarterly_mode:
         system_prompt += (
             "[MODELE]: 2 phrases maximum. "
-            "Explique simplement sur quoi repose le modele trimestriel "
-            "(monetisation, engagement, retention, churn, reactivations, couverture du panel) "
-            "et comment lire les probabilites sans survendre leur precision."
+            "Explique d'abord sur quoi repose le modèle trimestriel "
+            "(monétisation, engagement, rétention, churn, réactivations, couverture du panel), "
+            "puis explique clairement ce que représente chaque probabilité. "
+            "Quand la probabilité de revenus est mentionnée, présente-la comme une probabilité implicite "
+            "de dépasser la cible de revenus communiquée par le management, et non comme une certitude."
         )
 
     user_prompt = (
@@ -225,17 +227,17 @@ def generer_rapport_ia(
             )
             rapport = (
                 "[RESUME]\n"
-                "Le signal quotidien et trimestriel est disponible, mais le modele supervise complet n'est pas encore branche.\n\n"
+                "Le signal quotidien et trimestriel est disponible, mais le modèle supervisé complet n'est pas encore branché.\n\n"
                 "[TENDANCES]\n"
                 f"- Signal bias: {proxy.get('signal_bias', 'neutral')}.\n"
-                f"- Nowcast trimestriel: {quarterly_label} | Beat guidance revenus: {quarterly_revenue} | Beat EBITDA: {quarterly_ebitda}.\n\n"
+                f"- Nowcast trimestriel: {quarterly_label} | Beat revenus: {quarterly_revenue} | Beat EBITDA: {quarterly_ebitda}.\n\n"
                 "[ATTENTION]\n"
-                "- Les probabilites restent implicites tant que l'historique guidance n'est pas complet.\n\n"
+                "- Les probabilités restent implicites tant que l'historique guidance n'est pas complet.\n\n"
                 "[CONSEILS]\n"
-                "Utiliser ce rapport comme couche explicable avant la modelisation supervisee.\n\n"
+                "Utiliser ce rapport comme couche explicable avant la modélisation supervisée.\n\n"
                 "[MODELE]\n"
-                f"Le modele trimestriel s'appuie sur la monetisation, l'engagement, la retention, le churn, les reactivations et la couverture du panel. "
-                f"Il suggere aujourd'hui {quarterly_revenue} de probabilite implicite de beat revenus, {quarterly_ebitda} pour l'EBITDA et {quarterly_guidance} pour un relevement de guidance."
+                f"Le modèle trimestriel agrège des signaux de monétisation, d'engagement, de rétention, de churn, de réactivations et de couverture du panel. "
+                f"Il suggère aujourd'hui une probabilité implicite de {quarterly_revenue} de dépasser la cible de revenus du management, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relèvement de guidance."
             )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))

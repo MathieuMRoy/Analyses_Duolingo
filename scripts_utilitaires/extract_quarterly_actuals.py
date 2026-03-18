@@ -155,14 +155,32 @@ def _extract_actual_eps(text: str) -> float | None:
 
 
 def _extract_guidance_midpoints(text: str, metric_label: str) -> tuple[float | None, float | None]:
-    # Guidance tables usually show "Metric  $A - $B  $C - $D"
+    # Guidance tables can show:
+    # - quarter range + FY range: "Revenues $238.5 - $241.5 $962 - $968"
+    # - quarter point + FY range: "Revenues $288.5 $1,197 - $1,221"
+    # - quarter point + FY point:  "Revenues $288.5 $1,209.0"
     guidance_text = _extract_guidance_section(text)
-    pattern = rf"{metric_label}\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s*-\s*\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s*-\s*\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)"
-    match = re.search(pattern, guidance_text, re.I)
-    if not match:
-        return None, None
-    q_low, q_high, fy_low, fy_high = (_clean_number(value) for value in match.groups())
-    return round((q_low + q_high) / 2.0, 3), round((fy_low + fy_high) / 2.0, 3)
+    escaped_label = re.escape(metric_label)
+
+    range_range = rf"{escaped_label}\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s*-\s*\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s*-\s*\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)"
+    match = re.search(range_range, guidance_text, re.I)
+    if match:
+        q_low, q_high, fy_low, fy_high = (_clean_number(value) for value in match.groups())
+        return round((q_low + q_high) / 2.0, 3), round((fy_low + fy_high) / 2.0, 3)
+
+    point_range = rf"{escaped_label}\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s*-\s*\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)"
+    match = re.search(point_range, guidance_text, re.I)
+    if match:
+        quarter_value, fy_low, fy_high = (_clean_number(value) for value in match.groups())
+        return round(quarter_value, 3), round((fy_low + fy_high) / 2.0, 3)
+
+    point_point = rf"{escaped_label}\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)\s+\$?(\d+(?:,\d{{3}})*(?:\.\d+)?)"
+    match = re.search(point_point, guidance_text, re.I)
+    if match:
+        quarter_value, fy_value = (_clean_number(value) for value in match.groups())
+        return round(quarter_value, 3), round(fy_value, 3)
+
+    return None, None
 
 
 def _extract_guidance_section(text: str) -> str:

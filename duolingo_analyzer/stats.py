@@ -1217,9 +1217,9 @@ def sauvegarder_rapport_excel(
             summary_lines = [
                 f"Date de reference : {metadata.get('as_of_date', 'N/D')}",
                 f"Trimestre suivi : {metadata.get('current_quarter', 'N/D')}",
-                f"Jours observes : {_pretty_fr_number(observed_days, 0)}",
+                f"Jours observés : {_pretty_fr_number(observed_days, 0)}",
                 f"Couverture moyenne : {_pretty_ratio_pct(avg_coverage, 1)}",
-                f"Signal trimestre : {bias_label}",
+                f"Signal trimestriel : {bias_label}",
             ]
             drivers = model.get("main_drivers") or ["Le modèle a encore trop peu d'historique pour faire émerger un moteur dominant."]
             risks = model.get("main_risks") or ["Le principal risque reste le manque d'historique de guidance pour calibrer finement le modèle."]
@@ -1282,7 +1282,7 @@ def sauvegarder_rapport_excel(
                     active_fill = "F4C542"
 
             write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenêtre actuellement suivie", NAVY)
-            write_card("C", "D", 5, "Taux utilisateurs actifs", _pretty_ratio_pct(active_rate_est, 1), "Part moyenne du panel demeurée active", active_fill)
+            write_card("C", "D", 5, "Taux d'utilisateurs actifs", _pretty_ratio_pct(active_rate_est, 1), "Part moyenne du panel demeurée active", active_fill)
             write_card(
                 "E",
                 "F",
@@ -1320,7 +1320,7 @@ def sauvegarder_rapport_excel(
                 _format_estimation_vs_guidance_note(
                     estimated_next_q_guidance,
                     revenue_reference,
-                    prefix="Guide N+1 est.",
+                    prefix="Guide N+1 estimé",
                     guidance_label="base",
                 ),
                 DUO_GREEN,
