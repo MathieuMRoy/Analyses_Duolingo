@@ -70,11 +70,12 @@ def _build_financial_signal_prompt(
         "Tu restes prudent, tu relies comportement utilisateur et implications business, "
         "et tu produis uniquement les sections suivantes dans cet ordre exact: "
         "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]. "
-        "Style tres court et orienté investisseur. "
+        "Style tres court, professionnel et oriente investisseur. "
         "[RESUME]: 2 phrases maximum. "
         "[TENDANCES]: 2 puces maximum. "
         "[ATTENTION]: 2 puces maximum. "
         "[CONSEILS]: 2 phrases maximum. "
+        "Utilise un francais fluide, des phrases completes et un vocabulaire naturel. "
         "Evite de repeter les chiffres bruts inutilement."
     )
 

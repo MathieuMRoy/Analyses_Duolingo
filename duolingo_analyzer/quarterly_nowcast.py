@@ -340,35 +340,35 @@ def _build_snapshot_for_quarter(
     drivers: list[str] = []
     risks: list[str] = []
     if avg_monetization_momentum is not None and avg_monetization_momentum >= 55:
-        drivers.append("Le momentum de monétisation reste au-dessus de la zone neutre.")
+        drivers.append("Le momentum de monétisation se maintient au-dessus de la zone neutre.")
     if avg_premium_momentum_14d is not None and avg_premium_momentum_14d > 0.002:
-        drivers.append("Le momentum Super 14j reste positif.")
+        drivers.append("La dynamique Super sur 14 jours demeure favorable.")
     if avg_churn_trend_14d is not None and avg_churn_trend_14d < -0.002:
-        drivers.append("La tendance d'abandon se détend sur la fenêtre récente.")
+        drivers.append("Le taux d'abandon se détend sur la période récente.")
     if avg_reactivation_trend_7d is not None and avg_reactivation_trend_7d > 0.002:
         drivers.append("Les réactivations soutiennent la rétention nette.")
     if avg_high_value_retention_trend is not None and avg_high_value_retention_trend > 0.002:
-        drivers.append("La cohorte à forte valeur conserve un signal de rétention solide.")
+        drivers.append("La rétention des cohortes à forte valeur reste solide.")
     if avg_coverage_ratio is not None and avg_coverage_ratio >= 0.70:
-        drivers.append("La couverture du panel donne une bonne profondeur de lecture.")
+        drivers.append("La couverture du panel offre une profondeur de lecture satisfaisante.")
 
     if avg_monetization_momentum is not None and avg_monetization_momentum < 45:
-        risks.append("Le momentum de monétisation reste sous la zone neutre.")
+        risks.append("Le momentum de monétisation demeure sous la zone neutre.")
     if avg_premium_momentum_14d is not None and avg_premium_momentum_14d < -0.002:
-        risks.append("Le momentum Super ralentit sur la fenêtre 14j.")
+        risks.append("La dynamique Super sur 14 jours ralentit.")
     if avg_churn_trend_14d is not None and avg_churn_trend_14d > 0.002:
-        risks.append("La tendance d'abandon remonte sur la fenêtre récente.")
+        risks.append("Le taux d'abandon repart à la hausse sur la période récente.")
     if avg_reactivation_trend_7d is not None and avg_reactivation_trend_7d < -0.002:
-        risks.append("Les réactivations se tassent.")
+        risks.append("Les réactivations montrent des signes d'essoufflement.")
     if avg_high_value_retention_trend is not None and avg_high_value_retention_trend < -0.002:
         risks.append("La rétention des cohortes à forte valeur se dégrade.")
     if avg_coverage_ratio is not None and avg_coverage_ratio < 0.45:
-        risks.append("La couverture du panel limite encore la confiance du signal.")
+        risks.append("La couverture du panel limite encore la fiabilité du signal.")
 
     if not drivers:
-        drivers.append("Le trimestre manque encore de profondeur pour faire émerger un driver dominant.")
+        drivers.append("Le trimestre reste encore trop jeune pour faire émerger un moteur dominant.")
     if not risks:
-        risks.append("Le risque principal reste le manque d'historique guidance pour calibrer finement le modele.")
+        risks.append("Le principal risque reste le manque d'historique de guidance pour calibrer finement le modèle.")
 
     snapshot = {
         "quarter": quarter,
