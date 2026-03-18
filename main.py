@@ -9,6 +9,7 @@ from duolingo_analyzer.agent import generer_rapport_ia
 from duolingo_analyzer.config import TARGET_USERS_FILE
 from duolingo_analyzer.discovery import initialiser_cibles
 from duolingo_analyzer.financial_signals import generate_financial_signal_package
+from duolingo_analyzer.quarterly_nowcast import generate_quarterly_nowcast_package
 from duolingo_analyzer.scraper import collecter_streaks_quotidiens
 from duolingo_analyzer.stats import calculer_statistiques, sauvegarder_rapport_excel
 
@@ -39,8 +40,14 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     signaux_financiers = generate_financial_signal_package(statistiques.get("date_jour"))
-    rapport_ia = generer_rapport_ia(statistiques, signaux_financiers)
-    sauvegarder_rapport_excel(statistiques, rapport_ia, signaux_financiers)
+    nowcast_trimestriel = generate_quarterly_nowcast_package(statistiques.get("date_jour"))
+    rapport_ia = generer_rapport_ia(statistiques, signaux_financiers, nowcast_trimestriel)
+    sauvegarder_rapport_excel(
+        statistiques,
+        rapport_ia,
+        signaux_financiers,
+        nowcast_trimestriel,
+    )
 
     print("\n" + "=" * 60)
     print("  OK - ANALYSE TERMINEE AVEC SUCCES")

@@ -1,9 +1,9 @@
 quarter,calendar_quarter_end,earnings_release_date,actual_revenue_musd,consensus_revenue_musd,revenue_surprise_pct,actual_eps,consensus_eps,eps_surprise_pct,actual_adjusted_ebitda_musd,consensus_adjusted_ebitda_musd,actual_paid_subscribers_m,consensus_paid_subscribers_m,actual_subscription_revenue_musd,consensus_subscription_revenue_musd,guidance_next_q_revenue_musd,guidance_fy_revenue_musd,guidance_signal,source_actuals,source_consensus,notes
-2024Q1,,,,,,,,,,,,,,,,,,,,
-2024Q2,,,,,,,,,,,,,,,,,,,,
-2024Q3,,,,,,,,,,,,,,,,,,,,
-2024Q4,,,,,,,,,,,,,,,,,,,,
-2025Q1,,,,,,,,,,,,,,,,,,,,
-2025Q2,,,,,,,,,,,,,,,,,,,,
-2025Q3,,,,,,,,,,,,,,,,,,,,
-2025Q4,,,,,,,,,,,,,,,,,,,,
+2024Q1,2024-03-31,2024-05-08,167.6,,,,,,44.0,,7.4,,131.7,,176.25,731.0,,Q1FY24 Shareholder Letter.pdf,,Auto-extracted from shareholder letter | guidance stored as midpoint of published range | missing fields: actual_eps
+2024Q2,2024-06-30,2024-08-07,178.3,,,,,,48.1,,8.0,,143.9,,188.2,734.8,,Q2FY24 Duolingo 06-30-24 Shareholder Letter.pdf,,Auto-extracted from shareholder letter | guidance stored as midpoint of published range | missing fields: actual_eps
+2024Q3,2024-09-30,2024-11-06,192.6,,,,,,47.5,,8.6,,157.6,,204.0,742.5,,Q3FY24 Duolingo 09-30-24 Shareholder Letter.pdf,,Auto-extracted from shareholder letter | guidance stored as midpoint of published range | missing fields: actual_eps
+2024Q4,2024-12-31,2025-02-27,209.6,,,,,,52.3,,9.5,,174.3,,222.0,970.5,,Q4FY24 Duolingo 12-31-24 Shareholder Letter.pdf,,Auto-extracted from shareholder letter | guidance stored as midpoint of published range | missing fields: actual_eps
+2025Q1,2025-03-31,2025-05-01,230.7,,,,,,62.8,,10.3,,191.0,,,,,Q1FY25 Duolingo 3-31-25 Shareholder Letter - Final 05.01.2025.pdf,,Auto-extracted from shareholder letter | missing fields: actual_eps
+2025Q2,2025-06-30,2025-08-06,252.3,,,0.91,,,78.7,,10.9,,210.7,,259.0,1015.0,Raised,Q2FY25 Duolingo 6-30-25 Shareholder Letter_Final.pdf,,Auto-extracted from shareholder letter | guidance stored as midpoint of published range
+2025Q3,2025-09-30,2025-11-05,271.7,,,5.95,,,80.0,,11.5,,229.5,,275.0,1029.5,Raised,Q3FY25 Duolingo 9-30-25 Shareholder Letter Final.pdf,,Auto-extracted from shareholder letter | guidance stored as midpoint of published range
+2025Q4,2025-12-31,2026-02-26,282.9,,,,,,84.3,,12.2,,,,,,,Q4FY25 Duolingo 12-31-25 Shareholder Letter (1).pdf,,"Auto-extracted from shareholder letter | missing fields: actual_subscription_revenue_musd, actual_eps"

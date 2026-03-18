@@ -49,11 +49,18 @@ def _executer_agent_adk(system_prompt: str, user_prompt: str) -> str | None:
         return None
 
 
-def _build_financial_signal_prompt(signal_package: dict) -> tuple[str, str]:
+def _build_financial_signal_prompt(
+    signal_package: dict,
+    quarterly_nowcast: dict | None = None,
+) -> tuple[str, str]:
     metadata = signal_package.get("metadata", {})
     panel = signal_package.get("panel", {})
     business = signal_package.get("business_signals", {})
     proxy = signal_package.get("financial_proxy_signals", {})
+    quarterly_meta = (quarterly_nowcast or {}).get("metadata", {})
+    quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
+    quarterly_current = (quarterly_nowcast or {}).get("current_quarter", {})
+    quarterly_readiness = (quarterly_nowcast or {}).get("labels_readiness", {})
 
     system_prompt = (
         "Tu es un analyste buy-side specialise en signaux avances de monetisation et retention. "
@@ -103,6 +110,23 @@ def _build_financial_signal_prompt(signal_package: dict) -> tuple[str, str]:
         f"Guidance raise probability: {proxy.get('guidance_raise_probability', 'N/D')}\n"
         f"Main drivers: {', '.join(proxy.get('main_drivers', []))}\n"
         f"Main risks: {', '.join(proxy.get('main_risks', []))}\n\n"
+        f"Current quarter tracked: {quarterly_meta.get('current_quarter', 'N/D')}\n"
+        f"Quarter signal bias: {quarterly_model.get('quarter_signal_bias', 'N/D')}\n"
+        f"Quarter confidence: {quarterly_model.get('confidence_level', 'N/D')}\n"
+        f"Quarter signal score: {quarterly_model.get('quarter_signal_score', 'N/D')}\n"
+        f"Revenue beat probability proxy: {quarterly_model.get('revenue_beat_probability_proxy', 'N/D')}\n"
+        f"EBITDA beat probability proxy: {quarterly_model.get('ebitda_beat_probability_proxy', 'N/D')}\n"
+        f"Guidance raise probability proxy: {quarterly_model.get('guidance_raise_probability_proxy', 'N/D')}\n"
+        f"Quarter observed days: {quarterly_current.get('observed_days', 'N/D')}\n"
+        f"Quarter avg coverage ratio: {_format_ratio_pct(quarterly_current.get('avg_coverage_ratio'))}\n"
+        f"Quarter premium momentum 14d: {_format_ratio_pct(quarterly_current.get('avg_premium_momentum_14d'))}\n"
+        f"Quarter churn trend 14d: {_format_ratio_pct(quarterly_current.get('avg_churn_trend_14d'))}\n"
+        f"Quarter reactivation trend 7d: {_format_ratio_pct(quarterly_current.get('avg_reactivation_trend_7d'))}\n"
+        f"Quarter main drivers: {', '.join(quarterly_model.get('main_drivers', []))}\n"
+        f"Quarter main risks: {', '.join(quarterly_model.get('main_risks', []))}\n"
+        f"Labels readiness: actuals={quarterly_readiness.get('actual_labels_ready', 'N/D')}, "
+        f"consensus={quarterly_readiness.get('consensus_labels_ready', 'N/D')}, "
+        f"supervised_ready={quarterly_readiness.get('supervised_ready', 'N/D')}\n\n"
         "Genere une lecture tres concise, analytique et orientee investisseur. "
         "Maximum total vise: 8 lignes. "
         "Privilegie l'interpretation plutot que la repetition brute des chiffres."
@@ -145,13 +169,17 @@ def _build_legacy_prompt(stats: dict) -> tuple[str, str]:
     return system_prompt, user_prompt
 
 
-def generer_rapport_ia(stats: dict, signal_package: dict | None = None) -> str:
+def generer_rapport_ia(
+    stats: dict,
+    signal_package: dict | None = None,
+    quarterly_nowcast: dict | None = None,
+) -> str:
     print("============================================================")
     print("  PARTIE 3 - AGENT IA ANALYSTE")
     print("============================================================")
 
     if signal_package:
-        system_prompt, user_prompt = _build_financial_signal_prompt(signal_package)
+        system_prompt, user_prompt = _build_financial_signal_prompt(signal_package, quarterly_nowcast)
     else:
         system_prompt, user_prompt = _build_legacy_prompt(stats)
 
@@ -167,12 +195,16 @@ def generer_rapport_ia(stats: dict, signal_package: dict | None = None) -> str:
     if not rapport:
         if signal_package:
             proxy = signal_package.get("financial_proxy_signals", {})
+            quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
+            quarterly_label = quarterly_model.get("quarter_signal_bias", "N/D")
+            quarterly_revenue = quarterly_model.get("revenue_beat_probability_proxy", "N/D")
+            quarterly_ebitda = quarterly_model.get("ebitda_beat_probability_proxy", "N/D")
             rapport = (
                 "[RESUME]\n"
-                "Le signal proxy est disponible, mais le modele supervise n'est pas encore branche.\n\n"
+                "Le signal proxy quotidien et trimestriel est disponible, mais le modele supervise n'est pas encore branche.\n\n"
                 "[TENDANCES]\n"
                 f"- Signal bias: {proxy.get('signal_bias', 'neutral')}.\n"
-                f"- Momentum monetisation: {proxy.get('monetization_momentum_index', 'N/D')}.\n\n"
+                f"- Nowcast trimestriel: {quarterly_label} | Revenue proxy: {quarterly_revenue} | EBITDA proxy: {quarterly_ebitda}.\n\n"
                 "[ATTENTION]\n"
                 "- Les probabilites de beat/miss restent indisponibles sans labels trimestriels.\n\n"
                 "[CONSEILS]\n"
