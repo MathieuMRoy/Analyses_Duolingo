@@ -114,9 +114,11 @@ def _build_financial_signal_prompt(
         f"Quarter signal bias: {quarterly_model.get('quarter_signal_bias', 'N/D')}\n"
         f"Quarter confidence: {quarterly_model.get('confidence_level', 'N/D')}\n"
         f"Quarter signal score: {quarterly_model.get('quarter_signal_score', 'N/D')}\n"
-        f"Revenue beat probability proxy: {quarterly_model.get('revenue_beat_probability_proxy', 'N/D')}\n"
-        f"EBITDA beat probability proxy: {quarterly_model.get('ebitda_beat_probability_proxy', 'N/D')}\n"
-        f"Guidance raise probability proxy: {quarterly_model.get('guidance_raise_probability_proxy', 'N/D')}\n"
+        f"Revenue beat guidance probability: {quarterly_model.get('revenue_beat_probability_proxy', 'N/D')}\n"
+        f"Revenue guidance reference: {quarterly_model.get('revenue_guidance_reference_musd', 'N/D')}\n"
+        f"Revenue guidance reference quarter: {quarterly_model.get('revenue_guidance_reference_quarter', 'N/D')}\n"
+        f"EBITDA beat probability: {quarterly_model.get('ebitda_beat_probability_proxy', 'N/D')}\n"
+        f"Guidance raise probability: {quarterly_model.get('guidance_raise_probability_proxy', 'N/D')}\n"
         f"Quarter observed days: {quarterly_current.get('observed_days', 'N/D')}\n"
         f"Quarter avg coverage ratio: {_format_ratio_pct(quarterly_current.get('avg_coverage_ratio'))}\n"
         f"Quarter premium momentum 14d: {_format_ratio_pct(quarterly_current.get('avg_premium_momentum_14d'))}\n"
@@ -125,7 +127,7 @@ def _build_financial_signal_prompt(
         f"Quarter main drivers: {', '.join(quarterly_model.get('main_drivers', []))}\n"
         f"Quarter main risks: {', '.join(quarterly_model.get('main_risks', []))}\n"
         f"Labels readiness: actuals={quarterly_readiness.get('actual_labels_ready', 'N/D')}, "
-        f"consensus={quarterly_readiness.get('consensus_labels_ready', 'N/D')}, "
+        f"guidance_benchmarks={quarterly_readiness.get('guidance_benchmarks_ready', 'N/D')}, "
         f"supervised_ready={quarterly_readiness.get('supervised_ready', 'N/D')}\n\n"
         "Genere une lecture tres concise, analytique et orientee investisseur. "
         "Maximum total vise: 8 lignes. "
@@ -201,14 +203,14 @@ def generer_rapport_ia(
             quarterly_ebitda = quarterly_model.get("ebitda_beat_probability_proxy", "N/D")
             rapport = (
                 "[RESUME]\n"
-                "Le signal proxy quotidien et trimestriel est disponible, mais le modele supervise n'est pas encore branche.\n\n"
+                "Le signal quotidien et trimestriel est disponible, mais le modele supervise complet n'est pas encore branche.\n\n"
                 "[TENDANCES]\n"
                 f"- Signal bias: {proxy.get('signal_bias', 'neutral')}.\n"
-                f"- Nowcast trimestriel: {quarterly_label} | Revenue proxy: {quarterly_revenue} | EBITDA proxy: {quarterly_ebitda}.\n\n"
+                f"- Nowcast trimestriel: {quarterly_label} | Beat guidance revenus: {quarterly_revenue} | Beat EBITDA: {quarterly_ebitda}.\n\n"
                 "[ATTENTION]\n"
-                "- Les probabilites de beat/miss restent indisponibles sans labels trimestriels.\n\n"
+                "- Les probabilites restent implicites tant que l'historique guidance n'est pas complet.\n\n"
                 "[CONSEILS]\n"
-                "Utiliser ce rapport comme couche proxy avant la modelisation supervisee."
+                "Utiliser ce rapport comme couche explicable avant la modelisation supervisee."
             )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))

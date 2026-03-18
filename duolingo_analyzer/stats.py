@@ -1036,7 +1036,7 @@ def sauvegarder_rapport_excel(
                 ("Max rate", _pretty_ratio_pct(business.get("max_rate"), 1)),
                 (
                     "Model readiness",
-                    "Probabilites implicites disponibles; calibration supervisee a enrichir avec les consensus.",
+                    "Probabilites implicites disponibles; calibration supervisee a enrichir d'abord avec l'historique de guidance management, puis avec le consensus.",
                 ),
             ]
             row_cursor = model_start_row
@@ -1166,9 +1166,9 @@ def sauvegarder_rapport_excel(
 
             bias_label = str(model.get("quarter_signal_bias") or "N/D")
             confidence_label = str(model.get("confidence_level") or "N/D")
-            revenue_prob = model.get("revenue_beat_probability_proxy")
-            ebitda_prob = model.get("ebitda_beat_probability_proxy")
-            guidance_prob = model.get("guidance_raise_probability_proxy")
+            revenue_prob = model.get("revenue_beat_guidance_probability", model.get("revenue_beat_probability_proxy"))
+            ebitda_prob = model.get("ebitda_beat_probability", model.get("ebitda_beat_probability_proxy"))
+            guidance_prob = model.get("guidance_raise_probability", model.get("guidance_raise_probability_proxy"))
             observed_days = current.get("observed_days")
             avg_coverage = current.get("avg_coverage_ratio")
             quarter_score = model.get("quarter_signal_score")
@@ -1189,12 +1189,28 @@ def sauvegarder_rapport_excel(
                 f"Trimestre suivi : {metadata.get('current_quarter', 'N/D')}",
                 f"Jours observes : {_pretty_fr_number(observed_days, 0)}",
                 f"Couverture moyenne : {_pretty_ratio_pct(avg_coverage, 1)}",
-                f"Lecture modele : {bias_label}",
+                f"Signal trimestre : {bias_label}",
             ]
             drivers = model.get("main_drivers") or ["Le modele a encore peu d'historique pour faire emerger un driver dominant."]
-            risks = model.get("main_risks") or ["Le principal risque reste l'absence de consensus complets pour calibrer le modele."]
+            risks = model.get("main_risks") or ["Le principal risque reste le manque d'historique guidance pour calibrer finement le modele."]
             primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique recente du panel"
             primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites actuelles de calibration"
+            revenue_reference = model.get("revenue_guidance_reference_musd")
+            revenue_reference_quarter = model.get("revenue_guidance_reference_quarter")
+            if isinstance(revenue_reference, numbers.Number):
+                reference_label = (
+                    f"le guidance management revenus ({_pretty_fr_number(revenue_reference, 1)} M$)"
+                    + (f" publie au {revenue_reference_quarter}" if revenue_reference_quarter else "")
+                )
+            else:
+                reference_label = "la trajectoire de revenus implicite du management"
+            revenue_clause = (
+                f"La probabilite implicite de battre {reference_label} ressort a {_pretty_ratio_pct(revenue_prob, 1)}, "
+                f"portee notamment par {primary_driver}."
+                if bias_label == "Favorable"
+                else f"La probabilite implicite de battre {reference_label} ressort a {_pretty_ratio_pct(revenue_prob, 1)}, "
+                f"freinee notamment par {primary_risk}."
+            )
             guidance_clause = (
                 f"La probabilite implicite d'un relèvement de guidance ressort a {_pretty_ratio_pct(guidance_prob, 1)}, "
                 f"portee notamment par {primary_driver}."
@@ -1203,8 +1219,10 @@ def sauvegarder_rapport_excel(
                 f"freinee notamment par {primary_risk}."
             )
             summary_text = (
-                "Ces probabilites implicites s'appuient sur la monetisation recente, la qualite d'engagement, "
-                "la retention des cohortes a forte valeur, les reactivations et la tendance du churn observees dans le panel. "
+                "Selon notre modele proprietaire fonde sur la monetisation recente, la qualite d'engagement, "
+                "la retention des cohortes a forte valeur, les reactivations et la tendance du churn observees dans le panel, "
+                + revenue_clause
+                + " "
                 + guidance_clause
             )
 
@@ -1230,10 +1248,10 @@ def sauvegarder_rapport_excel(
 
             write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenetre actuellement suivie", NAVY)
             write_card("C", "D", 5, "Taux utilisateurs actifs", _pretty_ratio_pct(active_rate_est, 1), "Part moyenne du panel restee active", active_fill)
-            write_card("E", "F", 5, "Prob. beat revenus", _pretty_ratio_pct(revenue_prob, 1), "Monetisation, engagement et retention", DUO_BLUE)
+            write_card("E", "F", 5, "Prob. beat guidance revenus", _pretty_ratio_pct(revenue_prob, 1), "Vs guidance management revenus", DUO_BLUE)
             write_card("G", "H", 5, "Prob. beat EBITDA", _pretty_ratio_pct(ebitda_prob, 1), "Monetisation, engagement et retention", NAVY)
 
-            write_card("A", "B", 10, "Prob. guidance raise", _pretty_ratio_pct(guidance_prob, 1), "Momentum recent et retention du panel", DUO_GREEN)
+            write_card("A", "B", 10, "Prob. guidance raise", _pretty_ratio_pct(guidance_prob, 1), "Probabilite implicite de relever la guidance", DUO_GREEN)
             write_card("C", "D", 10, "Confiance", confidence_label, "Couverture + profondeur historique", confidence_fill)
             write_card("E", "F", 10, "Score trimestre", _pretty_score(quarter_score, 1), "Score composite explicable", NAVY)
             write_card("G", "H", 10, "Couverture moyenne", _pretty_ratio_pct(avg_coverage, 1), "Moyenne du panel sur le trimestre", DUO_BLUE)
@@ -1270,7 +1288,16 @@ def sauvegarder_rapport_excel(
             write_box("A26:H26", "Etat du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
             model_rows = [
                 ("Actual labels ready", _pretty_fr_number(readiness.get("actual_labels_ready"), 0)),
-                ("Consensus labels ready", _pretty_fr_number(readiness.get("consensus_labels_ready"), 0)),
+                ("Guidance benchmarks ready", _pretty_fr_number(readiness.get("guidance_benchmarks_ready"), 0)),
+                (
+                    "Guidance revenus ref.",
+                    (
+                        f"{_pretty_fr_number(revenue_reference, 1)} M$"
+                        + (f" ({revenue_reference_quarter})" if revenue_reference_quarter else "")
+                    )
+                    if isinstance(revenue_reference, numbers.Number)
+                    else "N/D",
+                ),
                 ("Supervised ready", "Oui" if readiness.get("supervised_ready") else "Non"),
                 ("Etape suivante", next_step),
             ]
@@ -1300,9 +1327,9 @@ def sauvegarder_rapport_excel(
             history_headers = [
                 "Quarter",
                 "Score",
-                "Revenue",
+                "Rev. guidance",
                 "EBITDA",
-                "Guidance",
+                "Guidance raise",
                 "Signal",
                 "Confiance",
                 "Jours",
@@ -1321,9 +1348,9 @@ def sauvegarder_rapport_excel(
                 values = [
                     snapshot.get("quarter"),
                     snapshot.get("quarter_signal_score"),
-                    snapshot.get("revenue_beat_probability_proxy"),
-                    snapshot.get("ebitda_beat_probability_proxy"),
-                    snapshot.get("guidance_raise_probability_proxy"),
+                    snapshot.get("revenue_beat_guidance_probability", snapshot.get("revenue_beat_probability_proxy")),
+                    snapshot.get("ebitda_beat_probability", snapshot.get("ebitda_beat_probability_proxy")),
+                    snapshot.get("guidance_raise_probability", snapshot.get("guidance_raise_probability_proxy")),
                     snapshot.get("quarter_signal_bias"),
                     snapshot.get("confidence_level"),
                     snapshot.get("observed_days"),

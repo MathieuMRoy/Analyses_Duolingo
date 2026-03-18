@@ -3,7 +3,7 @@ Phase 2 quarterly nowcast layer.
 
 Transforms the daily financial signal history into:
 - quarter-level pre-earnings snapshots
-- explainable proxy probabilities
+- explainable implied probabilities
 - an investor-oriented quarterly nowcast package
 """
 from __future__ import annotations
@@ -63,6 +63,14 @@ def _quarter_from_date(value: object) -> str | None:
     if pd.isna(ts):
         return None
     return str(ts.to_period("Q"))
+
+
+def _previous_quarter(quarter: str) -> str | None:
+    try:
+        period = pd.Period(quarter, freq="Q")
+    except Exception:
+        return None
+    return str(period - 1)
 
 
 def _mean(series: pd.Series, window: int | None = None) -> float | None:
@@ -198,6 +206,7 @@ def _build_snapshot_for_quarter(
     quarter: str,
     quarter_df: pd.DataFrame,
     label_row: pd.Series | None = None,
+    labels_map: dict[str, pd.Series] | None = None,
 ) -> dict[str, object]:
     if quarter_df.empty:
         return {}
@@ -227,6 +236,11 @@ def _build_snapshot_for_quarter(
     avg_max_rate = _mean(quarter_df["max_rate"], 14)
     avg_xp_delta = _mean(quarter_df["xp_delta_mean"], 14)
     avg_subscription_proxy = _mean(quarter_df["subscription_momentum_proxy"], 14)
+    previous_quarter = _previous_quarter(quarter)
+    previous_label_row = labels_map.get(previous_quarter) if labels_map and previous_quarter else None
+    revenue_guidance_reference = None
+    if previous_label_row is not None and "guidance_next_q_revenue_musd" in previous_label_row.index:
+        revenue_guidance_reference = _safe_float(previous_label_row.get("guidance_next_q_revenue_musd"))
 
     monetization_norm = _clip(
         (avg_monetization_momentum - 50.0) / 30.0 if avg_monetization_momentum is not None else None
@@ -354,7 +368,7 @@ def _build_snapshot_for_quarter(
     if not drivers:
         drivers.append("Le trimestre manque encore de profondeur pour faire émerger un driver dominant.")
     if not risks:
-        risks.append("Le risque principal reste l'absence de labels consensus pour calibrer le modèle.")
+        risks.append("Le risque principal reste le manque d'historique guidance pour calibrer finement le modele.")
 
     snapshot = {
         "quarter": quarter,
@@ -384,6 +398,8 @@ def _build_snapshot_for_quarter(
         "revenue_beat_probability_proxy": _prob_from_score(revenue_score, confidence_label),
         "ebitda_beat_probability_proxy": _prob_from_score(ebitda_score, confidence_label),
         "guidance_raise_probability_proxy": _prob_from_score(guidance_score, confidence_label),
+        "revenue_guidance_reference_musd": _round_or_none(revenue_guidance_reference, 2),
+        "revenue_guidance_reference_quarter": previous_quarter,
         "main_drivers": drivers[:4],
         "main_risks": risks[:4],
     }
@@ -473,25 +489,31 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
         _add("Current Quarter", key, current.get(key), definition)
 
     _add("Model", "quarter_signal_bias", model.get("quarter_signal_bias"), "Lecture globale du trimestre courant.")
-    _add("Model", "confidence_level", model.get("confidence_level"), "Confiance du score proxy en fonction de la couverture et de la profondeur.")
+    _add("Model", "confidence_level", model.get("confidence_level"), "Confiance du score trimestriel en fonction de la couverture et de la profondeur.")
     _add("Model", "quarter_signal_score", model.get("quarter_signal_score"), "Score composite explicable du trimestre.")
+    _add(
+        "Model",
+        "revenue_guidance_reference_musd",
+        model.get("revenue_guidance_reference_musd"),
+        "Guidance management revenus utilise comme benchmark quand il est disponible.",
+    )
     _add(
         "Model",
         "revenue_beat_probability_proxy",
         model.get("revenue_beat_probability_proxy"),
-        "Probabilite proxy de beat revenus, non supervisee a ce stade.",
+        "Probabilite implicite de battre le guidance revenus management, non supervisee a ce stade.",
     )
     _add(
         "Model",
         "ebitda_beat_probability_proxy",
         model.get("ebitda_beat_probability_proxy"),
-        "Probabilite proxy de beat EBITDA, non supervisee a ce stade.",
+        "Probabilite implicite de beat EBITDA, non supervisee a ce stade.",
     )
     _add(
         "Model",
         "guidance_raise_probability_proxy",
         model.get("guidance_raise_probability_proxy"),
-        "Probabilite proxy de guidance raise, non supervisee a ce stade.",
+        "Probabilite implicite de relever la guidance, non supervisee a ce stade.",
     )
     _add("Model", "main_drivers", " | ".join(model.get("main_drivers", [])), "Drivers haussiers principaux.")
     _add("Model", "main_risks", " | ".join(model.get("main_risks", [])), "Risques principaux.")
@@ -504,9 +526,9 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
     )
     _add(
         "Readiness",
-        "consensus_labels_ready",
-        readiness.get("consensus_labels_ready"),
-        "Nombre de trimestres avec consensus renseignes.",
+        "guidance_benchmarks_ready",
+        readiness.get("guidance_benchmarks_ready"),
+        "Nombre de trimestres avec guidance management revenus disponible comme benchmark.",
     )
     _add(
         "Readiness",
@@ -531,7 +553,7 @@ def _build_historical_snapshot_df(history_df: pd.DataFrame, labels_df: pd.DataFr
     for quarter in all_quarters:
         quarter_df = history_df[history_df["quarter"] == quarter]
         label_row = labels_map.get(quarter)
-        snapshot = _build_snapshot_for_quarter(quarter, quarter_df, label_row)
+        snapshot = _build_snapshot_for_quarter(quarter, quarter_df, label_row, labels_map)
         if snapshot:
             quarter_rows.append(snapshot)
 
@@ -573,18 +595,23 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
         current_snapshot = current_snapshot_df.iloc[-1].to_dict()
 
     actual_labels_ready = 0
-    consensus_labels_ready = 0
+    guidance_benchmarks_ready = 0
     if not labels_df.empty:
         actual_labels_ready = int(labels_df["actual_revenue_musd"].notna().sum()) if "actual_revenue_musd" in labels_df.columns else 0
-        consensus_labels_ready = int(labels_df["consensus_revenue_musd"].notna().sum()) if "consensus_revenue_musd" in labels_df.columns else 0
+        guidance_benchmarks_ready = int(labels_df["guidance_next_q_revenue_musd"].notna().sum()) if "guidance_next_q_revenue_musd" in labels_df.columns else 0
 
     model_output = {
         "quarter_signal_bias": current_snapshot.get("quarter_signal_bias"),
         "confidence_level": current_snapshot.get("confidence_level"),
         "quarter_signal_score": current_snapshot.get("quarter_signal_score"),
+        "revenue_guidance_reference_musd": current_snapshot.get("revenue_guidance_reference_musd"),
+        "revenue_guidance_reference_quarter": current_snapshot.get("revenue_guidance_reference_quarter"),
         "revenue_beat_probability_proxy": current_snapshot.get("revenue_beat_probability_proxy"),
+        "revenue_beat_guidance_probability": current_snapshot.get("revenue_beat_probability_proxy"),
         "ebitda_beat_probability_proxy": current_snapshot.get("ebitda_beat_probability_proxy"),
+        "ebitda_beat_probability": current_snapshot.get("ebitda_beat_probability_proxy"),
         "guidance_raise_probability_proxy": current_snapshot.get("guidance_raise_probability_proxy"),
+        "guidance_raise_probability": current_snapshot.get("guidance_raise_probability_proxy"),
         "main_drivers": current_snapshot.get("main_drivers", []),
         "main_risks": current_snapshot.get("main_risks", []),
     }
@@ -602,15 +629,15 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
         "model_output": model_output,
         "labels_readiness": {
             "actual_labels_ready": actual_labels_ready,
-            "consensus_labels_ready": consensus_labels_ready,
-            "supervised_ready": bool(actual_labels_ready >= 6 and consensus_labels_ready >= 4),
+            "guidance_benchmarks_ready": guidance_benchmarks_ready,
+            "supervised_ready": bool(actual_labels_ready >= 6 and guidance_benchmarks_ready >= 4),
             "next_step": (
-                "Enrichir quarterly_labels_template.csv avec consensus et actuals avant calibration supervisee."
+                "Completer d'abord l'historique de guidance management, puis ajouter ensuite le consensus analystes comme couche de comparaison marche."
             ),
         },
         "historical_snapshots": historical_snapshot_df.to_dict("records"),
         "assumptions": [
-            "Les probabilites trimestrielles actuelles sont des proxys explicables, pas des probabilites supervisees calibrees.",
+            "Les probabilites trimestrielles actuelles sont des probabilites implicites explicables, benchmarkees sur le guidance management quand il est disponible.",
             "Le score combine momentum de monetisation, qualite d'engagement, retention et reactivations.",
             "La confiance depend de la couverture moyenne du panel et du nombre de jours observes dans le trimestre.",
         ],
