@@ -1036,7 +1036,7 @@ def sauvegarder_rapport_excel(
                 ("Max rate", _pretty_ratio_pct(business.get("max_rate"), 1)),
                 (
                     "Model readiness",
-                    "Pret pour proxys explicables, labels financiers a brancher pour les probabilites.",
+                    "Probabilites implicites disponibles; calibration supervisee a enrichir avec les consensus.",
                 ),
             ]
             row_cursor = model_start_row
@@ -1190,15 +1190,23 @@ def sauvegarder_rapport_excel(
                 f"Jours observes : {_pretty_fr_number(observed_days, 0)}",
                 f"Couverture moyenne : {_pretty_ratio_pct(avg_coverage, 1)}",
             ]
-            summary_text = (
-                f"Le trimestre {metadata.get('current_quarter', 'N/D')} ressort {bias_label.lower()} "
-                f"avec une confiance {confidence_label.lower()}. "
-                f"Le proxy revenus ressort a {_pretty_ratio_pct(revenue_prob, 1)} et le proxy EBITDA a "
-                f"{_pretty_ratio_pct(ebitda_prob, 1)}."
-            )
-
             drivers = model.get("main_drivers") or ["Le modele a encore peu d'historique pour faire emerger un driver dominant."]
             risks = model.get("main_risks") or ["Le principal risque reste l'absence de consensus complets pour calibrer le modele."]
+            primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique recente du panel"
+            primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites actuelles de calibration"
+            guidance_clause = (
+                f"La probabilite implicite d'un relèvement de guidance ressort a {_pretty_ratio_pct(guidance_prob, 1)}, "
+                f"portee notamment par {primary_driver}."
+                if bias_label == "Favorable"
+                else f"La probabilite implicite d'un relèvement de guidance ressort a {_pretty_ratio_pct(guidance_prob, 1)}, "
+                f"freinee notamment par {primary_risk}."
+            )
+            summary_text = (
+                "Ces probabilites implicites s'appuient sur la monetisation recente, la qualite d'engagement, "
+                "la retention des cohortes a forte valeur, les reactivations et la tendance du churn observees dans le panel. "
+                + guidance_clause
+            )
+
             next_step = readiness.get("next_step") or "Completer les labels trimestriels avant calibration supervisee."
 
             write_box("A1:H2", "NOWCAST TRIMESTRIEL", fill=NAVY, font_color=WHITE, size=18, bold=True)
@@ -1213,10 +1221,10 @@ def sauvegarder_rapport_excel(
 
             write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenetre actuellement suivie", NAVY)
             write_card("C", "D", 5, "Signal trimestriel", bias_label, "Lecture globale du trimestre", bias_fill)
-            write_card("E", "F", 5, "Revenue beat proxy", _pretty_ratio_pct(revenue_prob, 1), "Probabilite proxy explicable", DUO_BLUE)
-            write_card("G", "H", 5, "EBITDA beat proxy", _pretty_ratio_pct(ebitda_prob, 1), "Probabilite proxy explicable", NAVY)
+            write_card("E", "F", 5, "Prob. beat revenus", _pretty_ratio_pct(revenue_prob, 1), "Monetisation, engagement et retention", DUO_BLUE)
+            write_card("G", "H", 5, "Prob. beat EBITDA", _pretty_ratio_pct(ebitda_prob, 1), "Monetisation, engagement et retention", NAVY)
 
-            write_card("A", "B", 10, "Guidance raise proxy", _pretty_ratio_pct(guidance_prob, 1), "Lecture proxy guidance", DUO_GREEN)
+            write_card("A", "B", 10, "Prob. guidance raise", _pretty_ratio_pct(guidance_prob, 1), "Momentum recent et retention du panel", DUO_GREEN)
             write_card("C", "D", 10, "Confiance", confidence_label, "Couverture + profondeur historique", confidence_fill)
             write_card("E", "F", 10, "Score trimestre", _pretty_score(quarter_score, 1), "Score composite explicable", NAVY)
             write_card("G", "H", 10, "Couverture moyenne", _pretty_ratio_pct(avg_coverage, 1), "Moyenne du panel sur le trimestre", DUO_BLUE)
