@@ -309,21 +309,24 @@ def calculer_statistiques() -> dict | None:
             else 0
         )
 
-        has_max_reliable = ("HasMax" in df_jour.columns) and bool(df_jour["HasMax"].eq(True).any())
+        # Super = HasPlus hors Max
+        # Max = HasMax
+        if stats["nb_profils_jour"] > 0:
+            if "HasMax" in df_jour.columns:
+                abonnes_max = int(len(df_jour[df_jour["HasMax"] == True]))
+                stats["taux_conversion_max"] = (abonnes_max / stats["nb_profils_jour"]) * 100
+            else:
+                abonnes_max = 0
+                stats["taux_conversion_max"] = None
 
-        if has_max_reliable:
-            abonnes_max = int(len(df_jour[df_jour["HasMax"] == True]))
-            abonnes_super = (
-                int(len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)]))
-                if "HasPlus" in df_jour.columns
-                else 0
-            )
-            stats["taux_conversion_max"] = (
-                (abonnes_max / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
-            )
-            stats["taux_conversion_plus"] = (
-                (abonnes_super / stats["nb_profils_jour"]) * 100 if stats["nb_profils_jour"] > 0 else 0
-            )
+            if "HasPlus" in df_jour.columns:
+                if "HasMax" in df_jour.columns:
+                    abonnes_super = int(len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)]))
+                else:
+                    abonnes_super = int(len(df_jour[df_jour["HasPlus"] == True]))
+                stats["taux_conversion_plus"] = (abonnes_super / stats["nb_profils_jour"]) * 100
+            else:
+                stats["taux_conversion_plus"] = None
 
         if "Cohort" in df_jour.columns:
             for cohorte in stats["cohortes"].keys():
@@ -500,7 +503,7 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
             df_glossaire = pd.DataFrame([
                 {"KPI": "Moyenne Streak (J)", "Définition": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité à long terme."},
                 {"KPI": "Apprentissage (XP/j)", "Définition": "Gain moyen de points d'expérience (XP) depuis hier. Mesure l'effort d'apprentissage quotidien."},
-                {"KPI": "Taux Abonn. Super", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Super Duolingo' (hasPlus)."},
+                {"KPI": "Taux Abonn. Super", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Super Duolingo' (hasPlus) hors Duolingo Max."},
                 {"KPI": "Taux Abonn. Max", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Duolingo Max' (AI features)."},
                 {"KPI": "Taux d'Abandon Global", "Définition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombe à 0)."},
                 {"KPI": "Reactivations vs Veille", "Définition": "Nombre d'utilisateurs inactifs hier (streak à 0) redevenus actifs aujourd'hui."},
