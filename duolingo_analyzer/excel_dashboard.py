@@ -443,6 +443,8 @@ def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, fl
     if panel_total is not None and engagement_score is not None:
         active_users = int(round(panel_total * engagement_score))
 
+    abandon_global = _parse_float(latest.get("Taux d'Abandon Global"))
+
     return {
         "date_label": latest["Date"].strftime("%Y-%m-%d"),
         "panel_total": panel_total,
@@ -450,8 +452,8 @@ def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, fl
         "engagement_score": engagement_score,
         "reactivated_users": _parse_float(latest.get("Reactivations vs Veille")),
         "avg_streak": _parse_float(latest.get("Serie Moyenne (Jours)")),
-        "abandon_global": _parse_float(latest.get("Taux d'Abandon Global")),
-        "retention_rate": None if _parse_float(latest.get("Taux d'Abandon Global")) is None else 1 - _parse_float(latest.get("Taux d'Abandon Global")),
+        "abandon_global": abandon_global,
+        "retention_rate": None if abandon_global is None else 1 - abandon_global,
         "abandon_debutants": _parse_float(latest.get("Abandon Debutants")),
         "abandon_standard": _parse_float(latest.get("Abandon Standard")),
         "abandon_super_actifs": _parse_float(latest.get("Abandon Super-Actifs")),
@@ -597,7 +599,6 @@ def refresh_trends_dashboard(report_path: Path) -> None:
     summary_df = _load_sheet(report_path, SUMMARY_SHEET)
     chart_df = _load_sheet(report_path, CHART_DATA_SHEET)
 
-    normalized_summary = _prepare_summary_metrics_df(summary_df)
     global_df = _prepare_global_trend_df(summary_df)
     weekly_df = _prepare_weekly_comparison_df(summary_df)
     snapshot_df = _prepare_snapshot_df(chart_df)
@@ -618,7 +619,8 @@ def refresh_trends_dashboard(report_path: Path) -> None:
 
     chart_ws.append(["Date", "Taux Abonn. Super"])
     for row in global_df.itertuples(index=False):
-        chart_ws.append([row.Libelle, row[1]])
+        taux_percent = float(row[1]) * 100 if row[1] is not None and not pd.isna(row[1]) else None
+        chart_ws.append([row.Libelle, taux_percent])
 
     chart_ws["D1"] = "Segment"
     chart_ws["E1"] = "Taux (%)"
