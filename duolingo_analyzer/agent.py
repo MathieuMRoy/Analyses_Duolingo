@@ -62,22 +62,33 @@ def _build_financial_signal_prompt(
     quarterly_current = (quarterly_nowcast or {}).get("current_quarter", {})
     quarterly_readiness = (quarterly_nowcast or {}).get("labels_readiness", {})
 
+    quarterly_mode = quarterly_nowcast is not None
+    sections_instruction = "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]"
+    if quarterly_mode:
+        sections_instruction += " [MODELE]"
+
     system_prompt = (
         "Tu es un analyste buy-side specialise en signaux avances de monetisation et retention. "
         "Tu recois un paquet de signaux structures derives d'un panel quotidien Duolingo. "
         "Tu dois interpreter ces signaux comme un nowcast business et financier. "
         "Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
         "Tu restes prudent, tu relies comportement utilisateur et implications business, "
-        "et tu produis uniquement les sections suivantes dans cet ordre exact: "
-        "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]. "
+        f"et tu produis uniquement les sections suivantes dans cet ordre exact: {sections_instruction}. "
         "Style tres court, professionnel et oriente investisseur. "
         "[RESUME]: 2 phrases maximum. "
         "[TENDANCES]: 2 puces maximum. "
         "[ATTENTION]: 2 puces maximum. "
         "[CONSEILS]: 2 phrases maximum. "
         "Utilise un francais fluide, des phrases completes et un vocabulaire naturel. "
-        "Evite de repeter les chiffres bruts inutilement."
+        "Evite de repeter les chiffres bruts inutilement. "
     )
+    if quarterly_mode:
+        system_prompt += (
+            "[MODELE]: 2 phrases maximum. "
+            "Explique simplement sur quoi repose le modele trimestriel "
+            "(monetisation, engagement, retention, churn, reactivations, couverture du panel) "
+            "et comment lire les probabilites sans survendre leur precision."
+        )
 
     user_prompt = (
         f"Date de reference: {metadata.get('as_of_date', 'N/D')}\n"
@@ -115,11 +126,11 @@ def _build_financial_signal_prompt(
         f"Quarter signal bias: {quarterly_model.get('quarter_signal_bias', 'N/D')}\n"
         f"Quarter confidence: {quarterly_model.get('confidence_level', 'N/D')}\n"
         f"Quarter signal score: {quarterly_model.get('quarter_signal_score', 'N/D')}\n"
-        f"Revenue beat guidance probability: {quarterly_model.get('revenue_beat_probability_proxy', 'N/D')}\n"
+        f"Revenue beat probability: {quarterly_model.get('revenue_beat_guidance_probability', quarterly_model.get('revenue_beat_probability_proxy', 'N/D'))}\n"
         f"Revenue guidance reference: {quarterly_model.get('revenue_guidance_reference_musd', 'N/D')}\n"
         f"Revenue guidance reference quarter: {quarterly_model.get('revenue_guidance_reference_quarter', 'N/D')}\n"
-        f"EBITDA beat probability: {quarterly_model.get('ebitda_beat_probability_proxy', 'N/D')}\n"
-        f"Guidance raise probability: {quarterly_model.get('guidance_raise_probability_proxy', 'N/D')}\n"
+        f"EBITDA beat probability: {quarterly_model.get('ebitda_beat_probability', quarterly_model.get('ebitda_beat_probability_proxy', 'N/D'))}\n"
+        f"Guidance raise probability: {quarterly_model.get('guidance_raise_probability', quarterly_model.get('guidance_raise_probability_proxy', 'N/D'))}\n"
         f"Quarter observed days: {quarterly_current.get('observed_days', 'N/D')}\n"
         f"Quarter avg coverage ratio: {_format_ratio_pct(quarterly_current.get('avg_coverage_ratio'))}\n"
         f"Quarter premium momentum 14d: {_format_ratio_pct(quarterly_current.get('avg_premium_momentum_14d'))}\n"
@@ -200,8 +211,18 @@ def generer_rapport_ia(
             proxy = signal_package.get("financial_proxy_signals", {})
             quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
             quarterly_label = quarterly_model.get("quarter_signal_bias", "N/D")
-            quarterly_revenue = quarterly_model.get("revenue_beat_probability_proxy", "N/D")
-            quarterly_ebitda = quarterly_model.get("ebitda_beat_probability_proxy", "N/D")
+            quarterly_revenue = quarterly_model.get(
+                "revenue_beat_guidance_probability",
+                quarterly_model.get("revenue_beat_probability_proxy", "N/D"),
+            )
+            quarterly_ebitda = quarterly_model.get(
+                "ebitda_beat_probability",
+                quarterly_model.get("ebitda_beat_probability_proxy", "N/D"),
+            )
+            quarterly_guidance = quarterly_model.get(
+                "guidance_raise_probability",
+                quarterly_model.get("guidance_raise_probability_proxy", "N/D"),
+            )
             rapport = (
                 "[RESUME]\n"
                 "Le signal quotidien et trimestriel est disponible, mais le modele supervise complet n'est pas encore branche.\n\n"
@@ -211,7 +232,10 @@ def generer_rapport_ia(
                 "[ATTENTION]\n"
                 "- Les probabilites restent implicites tant que l'historique guidance n'est pas complet.\n\n"
                 "[CONSEILS]\n"
-                "Utiliser ce rapport comme couche explicable avant la modelisation supervisee."
+                "Utiliser ce rapport comme couche explicable avant la modelisation supervisee.\n\n"
+                "[MODELE]\n"
+                f"Le modele trimestriel s'appuie sur la monetisation, l'engagement, la retention, le churn, les reactivations et la couverture du panel. "
+                f"Il suggere aujourd'hui {quarterly_revenue} de probabilite implicite de beat revenus, {quarterly_ebitda} pour l'EBITDA et {quarterly_guidance} pour un relevement de guidance."
             )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))

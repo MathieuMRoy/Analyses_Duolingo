@@ -1184,6 +1184,16 @@ def sauvegarder_rapport_excel(
                 "Faible": "FF8A65",
             }.get(confidence_label, NAVY)
 
+            ai_sections = {
+                "MODELE": None,
+            }
+            if ia_report:
+                import re
+                for key in ai_sections.keys():
+                    match = re.search(rf"\[{key}\](.*?)(?=\[|$)", ia_report, re.DOTALL)
+                    if match:
+                        ai_sections[key] = match.group(1).strip()
+
             summary_lines = [
                 f"Date de reference : {metadata.get('as_of_date', 'N/D')}",
                 f"Trimestre suivi : {metadata.get('current_quarter', 'N/D')}",
@@ -1205,26 +1215,28 @@ def sauvegarder_rapport_excel(
             else:
                 reference_label = "la trajectoire de revenus communiquée par le management"
             revenue_clause = (
-                f"La probabilite implicite de depasser {reference_label} ressort a {_pretty_ratio_pct(revenue_prob, 1)}, "
+                f"La probabilité implicite de dépasser {reference_label} ressort à {_pretty_ratio_pct(revenue_prob, 1)}, "
                 f"soutenue notamment par {primary_driver}."
                 if bias_label == "Favorable"
-                else f"La probabilite implicite de depasser {reference_label} ressort a {_pretty_ratio_pct(revenue_prob, 1)}, "
-                f"freinee notamment par {primary_risk}."
+                else f"La probabilité implicite de dépasser {reference_label} ressort à {_pretty_ratio_pct(revenue_prob, 1)}, "
+                f"freinée notamment par {primary_risk}."
             )
             guidance_clause = (
-                f"La probabilite implicite d'un relevement de guidance ressort a {_pretty_ratio_pct(guidance_prob, 1)}, "
+                f"La probabilité implicite d'un relèvement de guidance ressort à {_pretty_ratio_pct(guidance_prob, 1)}, "
                 f"soutenue notamment par {primary_driver}."
                 if bias_label == "Favorable"
-                else f"La probabilite implicite d'un relevement de guidance ressort a {_pretty_ratio_pct(guidance_prob, 1)}, "
-                f"freinee notamment par {primary_risk}."
+                else f"La probabilité implicite d'un relèvement de guidance ressort à {_pretty_ratio_pct(guidance_prob, 1)}, "
+                f"freinée notamment par {primary_risk}."
             )
             summary_text = (
-                "Selon notre modele proprietaire, fonde sur la monetisation recente, la qualite de l'engagement, "
-                "la retention des cohortes a forte valeur, les reactivations et l'evolution du churn observees dans le panel, "
+                "Selon notre modèle propriétaire, fondé sur la monétisation récente, la qualité de l'engagement, "
+                "la rétention des cohortes à forte valeur, les réactivations et l'évolution du churn observées dans le panel, "
                 + revenue_clause
                 + " "
                 + guidance_clause
             )
+            if ai_sections["MODELE"]:
+                summary_text = ai_sections["MODELE"]
 
             next_step = readiness.get("next_step") or "Completer les labels trimestriels avant calibration supervisee."
 
@@ -1246,20 +1258,20 @@ def sauvegarder_rapport_excel(
                 elif active_rate_est < 0.98:
                     active_fill = "F4C542"
 
-            write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenetre actuellement suivie", NAVY)
+            write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenêtre actuellement suivie", NAVY)
             write_card("C", "D", 5, "Taux utilisateurs actifs", _pretty_ratio_pct(active_rate_est, 1), "Part moyenne du panel demeurée active", active_fill)
-            write_card("E", "F", 5, "Prob. beat guidance revenus", _pretty_ratio_pct(revenue_prob, 1), "Vs cible de revenus communiquée", DUO_BLUE)
-            write_card("G", "H", 5, "Prob. beat EBITDA", _pretty_ratio_pct(ebitda_prob, 1), "Monetisation, engagement et retention", NAVY)
+            write_card("E", "F", 5, "Prob. beat revenus", _pretty_ratio_pct(revenue_prob, 1), "Vs cible de revenus communiquée", DUO_BLUE)
+            write_card("G", "H", 5, "Prob. beat EBITDA", _pretty_ratio_pct(ebitda_prob, 1), "Monétisation, engagement et rétention", NAVY)
 
-            write_card("A", "B", 10, "Prob. guidance raise", _pretty_ratio_pct(guidance_prob, 1), "Probabilite implicite de relever la guidance", DUO_GREEN)
+            write_card("A", "B", 10, "Prob. guidance raise", _pretty_ratio_pct(guidance_prob, 1), "Probabilité implicite de relever la guidance", DUO_GREEN)
             write_card("C", "D", 10, "Confiance", confidence_label, "Couverture + profondeur historique", confidence_fill)
             write_card("E", "F", 10, "Score trimestre", _pretty_score(quarter_score, 1), "Score synthétique du trimestre", NAVY)
             write_card("G", "H", 10, "Couverture moyenne", _pretty_ratio_pct(avg_coverage, 1), "Moyenne du panel sur le trimestre", DUO_BLUE)
 
-            write_box("A15:H15", "Lecture du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            write_box("A15:H15", "Lecture du modèle", fill=NAVY, font_color=WHITE, size=11, bold=True)
             write_box(
                 "A16:H18",
-                _compact_summary_text(summary_text, max_sentences=2, max_chars=180),
+                _compact_summary_text(summary_text, max_sentences=2, max_chars=240),
                 fill=WHITE,
                 font_color="000000",
                 size=11,
@@ -1285,12 +1297,12 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
-            write_box("A26:H26", "Etat du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            write_box("A26:H26", "État du modèle", fill=NAVY, font_color=WHITE, size=11, bold=True)
             model_rows = [
-                ("Labels trimestriels reels", _pretty_fr_number(readiness.get("actual_labels_ready"), 0)),
+                ("Labels trimestriels réels", _pretty_fr_number(readiness.get("actual_labels_ready"), 0)),
                 ("Benchmarks guidance", _pretty_fr_number(readiness.get("guidance_benchmarks_ready"), 0)),
                 (
-                    "Reference guidance revenus",
+                    "Référence guidance revenus",
                     (
                         f"{_pretty_fr_number(revenue_reference, 1)} M$"
                         + (f" ({revenue_reference_quarter})" if revenue_reference_quarter else "")
@@ -1298,8 +1310,8 @@ def sauvegarder_rapport_excel(
                     if isinstance(revenue_reference, numbers.Number)
                     else "N/D",
                 ),
-                ("Modele supervise pret", "Oui" if readiness.get("supervised_ready") else "Non"),
-                ("Etape suivante", next_step),
+                ("Modèle supervisé prêt", "Oui" if readiness.get("supervised_ready") else "Non"),
+                ("Étape suivante", next_step),
             ]
             row_cursor = 27
             for label, value in model_rows:
