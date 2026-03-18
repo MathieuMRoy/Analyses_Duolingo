@@ -20,6 +20,7 @@ TRENDS_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Données Graphique"
 
 SIGNALS_SHEET = "Signaux Financiers"
+SIGNALS_RAW_SHEET = "Signaux Financiers - Raw"
 
 PERCENT_COLUMNS = {
     "Taux Abonn. Super",
@@ -244,6 +245,64 @@ def _copier_rapport_vers_google_drive(report_path: Path) -> Path | None:
         return None
 
     return destination_file
+
+
+def _pretty_fr_number(value: object, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    try:
+        numeric = float(value)
+    except Exception:
+        return str(value)
+
+    if digits == 0:
+        return f"{int(round(numeric)):,}".replace(",", " ")
+    return f"{numeric:,.{digits}f}".replace(",", " ").replace(".", ",")
+
+
+def _pretty_ratio_pct(value: object, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    try:
+        return f"{float(value) * 100:.{digits}f}%".replace(".", ",")
+    except Exception:
+        return "N/D"
+
+
+def _pretty_delta_pts(value: object, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    try:
+        return f"{float(value) * 100:+.{digits}f} pts".replace(".", ",")
+    except Exception:
+        return "N/D"
+
+
+def _pretty_score(value: object, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    try:
+        return f"{float(value):.{digits}f} / 100".replace(".", ",")
+    except Exception:
+        return "N/D"
+
+
+def _label_signal_bias(value: object) -> str:
+    mapping = {
+        "favorable": "Favorable",
+        "neutral": "Neutre",
+        "unfavorable": "Defavorable",
+    }
+    return mapping.get(str(value or "").strip().lower(), "N/D")
+
+
+def _label_confidence(value: object) -> str:
+    mapping = {
+        "high": "Elevee",
+        "medium": "Moyenne",
+        "low": "Faible",
+    }
+    return mapping.get(str(value or "").strip().lower(), "N/D")
 
 
 def calculer_statistiques() -> dict | None:
@@ -504,12 +563,10 @@ def sauvegarder_rapport_excel(
         with pd.ExcelWriter(RAPPORT_EXCEL_FILE, engine="openpyxl", mode=writer_mode, **writer_kwargs) as writer:
             df_resume.to_excel(writer, sheet_name=SUMMARY_SHEET, index=False)
 
-            if ia_report:
-                pd.DataFrame().to_excel(writer, sheet_name=AI_SHEET, index=False)
-
             if financial_signals:
                 signal_sheet_df = build_financial_signal_sheet_df(financial_signals)
-                signal_sheet_df.to_excel(writer, sheet_name=SIGNALS_SHEET, index=False)
+                pd.DataFrame().to_excel(writer, sheet_name=SIGNALS_SHEET, index=False)
+                signal_sheet_df.to_excel(writer, sheet_name=SIGNALS_RAW_SHEET, index=False)
 
             df_glossaire = pd.DataFrame([
                 {"KPI": "Moyenne Streak (J)", "Définition": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité à long terme."},
@@ -613,6 +670,12 @@ def sauvegarder_rapport_excel(
             if bad_name in wb.sheetnames:
                 del wb[bad_name]
 
+        if AI_SHEET in wb.sheetnames:
+            del wb[AI_SHEET]
+
+        if SIGNALS_RAW_SHEET in wb.sheetnames:
+            wb[SIGNALS_RAW_SHEET].sheet_state = "hidden"
+
         DUO_GREEN = "58CC02"
         DUO_BLUE = "1CB0F6"
         NAVY = "1F4E78"
@@ -629,6 +692,7 @@ def sauvegarder_rapport_excel(
         success_fill = PatternFill(start_color=GREEN_SOFT, end_color=GREEN_SOFT, fill_type="solid")
         warning_fill = PatternFill(start_color=AMBER_SOFT, end_color=AMBER_SOFT, fill_type="solid")
         alert_fill = PatternFill(start_color=RED_SOFT, end_color=RED_SOFT, fill_type="solid")
+        white_fill = PatternFill(start_color=WHITE, end_color=WHITE, fill_type="solid")
         base_font = Font(name=BASE_FONT_NAME, size=11, color="000000")
 
         center_align = Alignment(horizontal="center", vertical="center")
@@ -640,6 +704,297 @@ def sauvegarder_rapport_excel(
             top=Side(style="thin", color="DDDDDD"),
             bottom=Side(style="thin", color="DDDDDD"),
         )
+
+        def render_financial_nowcast_sheet(ws, signal_package: dict) -> None:
+            for merged_range in list(ws.merged_cells.ranges):
+                ws.unmerge_cells(str(merged_range))
+            if ws.max_row:
+                ws.delete_rows(1, ws.max_row)
+
+            ws.sheet_view.showGridLines = False
+            for column_letter, width in {
+                "A": 18,
+                "B": 18,
+                "C": 18,
+                "D": 18,
+                "E": 18,
+                "F": 18,
+                "G": 18,
+                "H": 18,
+            }.items():
+                ws.column_dimensions[column_letter].width = width
+
+            metadata = signal_package.get("metadata", {})
+            panel = signal_package.get("panel", {})
+            business = signal_package.get("business_signals", {})
+            proxy = signal_package.get("financial_proxy_signals", {})
+            assumptions = signal_package.get("assumptions", [])
+            ai_sections = {
+                "RESUME": None,
+                "TENDANCES": None,
+                "ATTENTION": None,
+                "CONSEILS": None,
+            }
+
+            if ia_report:
+                import re
+                for key in ai_sections.keys():
+                    match = re.search(rf"\[{key}\](.*?)(?=\[|$)", ia_report, re.DOTALL)
+                    if match:
+                        ai_sections[key] = match.group(1).strip()
+
+            def write_box(range_ref: str, value: str, *, fill: str = WHITE, font_color: str = "000000",
+                          size: int = 11, bold: bool = False, align: Alignment | None = None) -> None:
+                ws.merge_cells(range_ref)
+                cell = ws[range_ref.split(":")[0]]
+                cell.value = value
+                cell.fill = PatternFill(start_color=fill, end_color=fill, fill_type="solid")
+                cell.font = Font(name=BASE_FONT_NAME, size=size, bold=bold, color=font_color)
+                cell.alignment = align or center_align
+                cell.border = thin_border
+
+            def write_card(start_col: str, end_col: str, title_row: int, title: str, value: str, note: str,
+                           accent: str, value_color: str = "000000") -> None:
+                write_box(
+                    f"{start_col}{title_row}:{end_col}{title_row}",
+                    title,
+                    fill=accent,
+                    font_color=WHITE,
+                    size=10,
+                    bold=True,
+                )
+                write_box(
+                    f"{start_col}{title_row + 1}:{end_col}{title_row + 2}",
+                    value,
+                    fill=WHITE,
+                    font_color=value_color,
+                    size=17,
+                    bold=True,
+                )
+                write_box(
+                    f"{start_col}{title_row + 3}:{end_col}{title_row + 3}",
+                    note,
+                    fill=LIGHT_GREY,
+                    font_color="555555",
+                    size=9,
+                    align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+                )
+
+            bias_label = _label_signal_bias(proxy.get("signal_bias"))
+            confidence_label = _label_confidence(proxy.get("confidence_level"))
+            coverage_ratio = panel.get("coverage_ratio")
+            observed_users = panel.get("observed_users_today")
+            target_users = panel.get("target_panel_size")
+            summary_lines = [
+                f"Date de reference : {metadata.get('as_of_date', 'N/D')}",
+                f"Panel observe : {_pretty_fr_number(observed_users, 0)} / {_pretty_fr_number(target_users, 0)} "
+                f"({_pretty_ratio_pct(coverage_ratio, 1)})",
+                f"Signal global : {bias_label} | Confiance : {confidence_label}",
+            ]
+
+            drivers = proxy.get("main_drivers") or ["Aucun driver majeur identifie pour l'instant."]
+            risks = proxy.get("main_risks") or ["Aucun risque majeur identifie pour l'instant."]
+            summary_text = (
+                f"Le signal du jour ressort {bias_label.lower()} avec un niveau de confiance {confidence_label.lower()}. "
+                f"Le momentum de monetisation ressort a {_pretty_score(proxy.get('monetization_momentum_index'))}, "
+                f"tandis que la qualite d'engagement se situe a {_pretty_score(proxy.get('engagement_quality_index'))}. "
+                f"La dynamique premium 14j ressort a {_pretty_delta_pts(proxy.get('premium_momentum_14d'))} "
+                f"et la tendance de churn a {_pretty_delta_pts(proxy.get('churn_trend_14d'))}."
+            )
+            if ai_sections["RESUME"]:
+                summary_text = ai_sections["RESUME"]
+
+            bias_fill = {
+                "Favorable": DUO_GREEN,
+                "Neutre": "F4C542",
+                "Defavorable": "FF6B6B",
+            }.get(bias_label, NAVY)
+            confidence_fill = {
+                "Elevee": DUO_GREEN,
+                "Moyenne": "F4C542",
+                "Faible": "FF8A65",
+            }.get(confidence_label, NAVY)
+
+            write_box("A1:H2", "NOWCAST FINANCIER", fill=NAVY, font_color=WHITE, size=18, bold=True)
+            write_box(
+                "A3:H3",
+                " | ".join(summary_lines),
+                fill=LIGHT_GREY,
+                font_color="333333",
+                size=10,
+                align=Alignment(horizontal="center", vertical="center"),
+            )
+
+            write_card("A", "B", 5, "Signal global", bias_label, "Lecture actuelle du signal", bias_fill)
+            write_card("C", "D", 5, "Confiance", confidence_label, "Couverture + profondeur historique", confidence_fill)
+            write_card(
+                "E",
+                "F",
+                5,
+                "Couverture panel",
+                _pretty_ratio_pct(coverage_ratio, 1),
+                "Part du panel observee aujourd'hui",
+                DUO_BLUE,
+            )
+            write_card(
+                "G",
+                "H",
+                5,
+                "Panel observe",
+                _pretty_fr_number(observed_users, 0),
+                f"Cible : {_pretty_fr_number(target_users, 0)}",
+                NAVY,
+            )
+
+            write_card(
+                "A",
+                "B",
+                10,
+                "Momentum monetisation",
+                _pretty_score(proxy.get("monetization_momentum_index")),
+                "Indice composite de monetisation",
+                DUO_GREEN,
+            )
+            write_card(
+                "C",
+                "D",
+                10,
+                "Qualite engagement",
+                _pretty_score(proxy.get("engagement_quality_index")),
+                "Indice composite d'engagement",
+                DUO_BLUE,
+            )
+            write_card(
+                "E",
+                "F",
+                10,
+                "Premium momentum 14j",
+                _pretty_delta_pts(proxy.get("premium_momentum_14d")),
+                "Variation recente du taux Super",
+                NAVY,
+            )
+            churn_value = proxy.get("churn_trend_14d")
+            churn_color = DUO_GREEN if isinstance(churn_value, numbers.Number) and churn_value <= 0 else "FF6B6B"
+            write_card(
+                "G",
+                "H",
+                10,
+                "Churn trend 14j",
+                _pretty_delta_pts(churn_value),
+                "Variation recente du taux d'abandon",
+                churn_color,
+            )
+
+            write_box("A15:H15", "Lecture investisseur", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            write_box(
+                "A16:H18",
+                summary_text,
+                fill=WHITE,
+                font_color="000000",
+                size=11,
+                align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+            )
+
+            left_title = "Tendances IA" if ai_sections["TENDANCES"] else "Main Drivers"
+            right_title = "Points d'attention" if ai_sections["ATTENTION"] else "Main Risks"
+            left_body = ai_sections["TENDANCES"] or "\n".join(f"- {item}" for item in drivers)
+            right_body = ai_sections["ATTENTION"] or "\n".join(f"- {item}" for item in risks)
+
+            write_box("A20:D20", left_title, fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
+            write_box("E20:H20", right_title, fill="FF6B6B", font_color=WHITE, size=11, bold=True)
+            write_box(
+                "A21:D25",
+                left_body,
+                fill=WHITE,
+                font_color="000000",
+                size=10,
+                align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+            )
+            write_box(
+                "E21:H25",
+                right_body,
+                fill=WHITE,
+                font_color="000000",
+                size=10,
+                align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+            )
+
+            if ai_sections["CONSEILS"]:
+                write_box("A27:H27", "Conclusion IA", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
+                write_box(
+                    "A28:H31",
+                    ai_sections["CONSEILS"],
+                    fill=LIGHT_GREY,
+                    font_color="000000",
+                    size=10,
+                    align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+                )
+                model_header_row = 33
+                model_start_row = 34
+            else:
+                model_header_row = 27
+                model_start_row = 28
+
+            write_box(f"A{model_header_row}:H{model_header_row}", "Etat du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            model_rows = [
+                ("Revenue Beat Probability", "N/D (Phase 2)"),
+                ("EBITDA Beat Probability", "N/D (Phase 2)"),
+                ("Guidance Raise Probability", "N/D (Phase 2)"),
+                ("Reactivation trend 7j", _pretty_delta_pts(proxy.get("reactivation_trend_7d"))),
+                ("High-value retention", _pretty_delta_pts(proxy.get("high_value_retention_trend"))),
+                ("Super rate", _pretty_ratio_pct(business.get("super_rate"), 1)),
+                ("Max rate", _pretty_ratio_pct(business.get("max_rate"), 1)),
+                (
+                    "Model readiness",
+                    "Pret pour proxys explicables, labels financiers a brancher pour les probabilites.",
+                ),
+            ]
+            row_cursor = model_start_row
+            for label, value in model_rows:
+                row_fill = zebra_fill if row_cursor % 2 == 0 else white_fill
+                ws[f"A{row_cursor}"] = label
+                ws[f"A{row_cursor}"].fill = row_fill
+                ws[f"A{row_cursor}"].font = Font(name=BASE_FONT_NAME, size=10, bold=True)
+                ws[f"A{row_cursor}"].alignment = left_align
+                ws[f"A{row_cursor}"].border = thin_border
+                ws.merge_cells(f"B{row_cursor}:H{row_cursor}")
+                value_cell = ws[f"B{row_cursor}"]
+                value_cell.value = value
+                value_cell.fill = row_fill
+                value_cell.font = Font(name=BASE_FONT_NAME, size=10)
+                value_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                value_cell.border = thin_border
+                for merged_col in range(3, 9):
+                    ws.cell(row=row_cursor, column=merged_col).border = thin_border
+                    ws.cell(row=row_cursor, column=merged_col).fill = row_fill
+                row_cursor += 1
+
+            hypotheses_row = row_cursor + 1
+            write_box(f"A{hypotheses_row}:H{hypotheses_row}", "Hypotheses & notes", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothese specifique."
+            write_box(
+                f"A{hypotheses_row + 1}:H{hypotheses_row + 4}",
+                assumptions_text,
+                fill=LIGHT_GREY,
+                font_color="333333",
+                size=10,
+                align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+            )
+
+            for row_idx in [6, 11]:
+                ws.row_dimensions[row_idx].height = 28
+                ws.row_dimensions[row_idx + 1].height = 26
+                ws.row_dimensions[row_idx + 2].height = 22
+            ws.row_dimensions[16].height = 24
+            ws.row_dimensions[17].height = 24
+            ws.row_dimensions[18].height = 24
+            for row_idx in range(21, 26):
+                ws.row_dimensions[row_idx].height = 22
+            if ai_sections["CONSEILS"]:
+                for row_idx in range(28, 32):
+                    ws.row_dimensions[row_idx].height = 24
+            for row_idx in range(hypotheses_row + 1, hypotheses_row + 5):
+                ws.row_dimensions[row_idx].height = 22
 
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
@@ -720,6 +1075,11 @@ def sauvegarder_rapport_excel(
                 ws.row_dimensions[8].height = 120
 
                 ws.sheet_view.showGridLines = False
+                continue
+
+            if sheet_name == SIGNALS_SHEET and financial_signals:
+                render_financial_nowcast_sheet(ws, financial_signals)
+                ws.freeze_panes = "A5"
                 continue
 
             if sheet_name == TRENDS_SHEET:
