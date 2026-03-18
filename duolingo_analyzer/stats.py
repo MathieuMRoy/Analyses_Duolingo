@@ -1189,6 +1189,7 @@ def sauvegarder_rapport_excel(
                 f"Trimestre suivi : {metadata.get('current_quarter', 'N/D')}",
                 f"Jours observes : {_pretty_fr_number(observed_days, 0)}",
                 f"Couverture moyenne : {_pretty_ratio_pct(avg_coverage, 1)}",
+                f"Lecture modele : {bias_label}",
             ]
             drivers = model.get("main_drivers") or ["Le modele a encore peu d'historique pour faire emerger un driver dominant."]
             risks = model.get("main_risks") or ["Le principal risque reste l'absence de consensus complets pour calibrer le modele."]
@@ -1219,8 +1220,16 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="center", vertical="center"),
             )
 
+            active_rate_est = current.get("avg_active_rate")
+            active_fill = DUO_GREEN
+            if isinstance(active_rate_est, numbers.Number):
+                if active_rate_est < 0.95:
+                    active_fill = "FF6B6B"
+                elif active_rate_est < 0.98:
+                    active_fill = "F4C542"
+
             write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenetre actuellement suivie", NAVY)
-            write_card("C", "D", 5, "Signal trimestriel", bias_label, "Lecture globale du trimestre", bias_fill)
+            write_card("C", "D", 5, "Taux utilisateurs actifs", _pretty_ratio_pct(active_rate_est, 1), "Part moyenne du panel restee active", active_fill)
             write_card("E", "F", 5, "Prob. beat revenus", _pretty_ratio_pct(revenue_prob, 1), "Monetisation, engagement et retention", DUO_BLUE)
             write_card("G", "H", 5, "Prob. beat EBITDA", _pretty_ratio_pct(ebitda_prob, 1), "Monetisation, engagement et retention", NAVY)
 
