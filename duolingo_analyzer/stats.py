@@ -11,12 +11,15 @@ import pandas as pd
 
 from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE, REPORT_DIR, now_toronto
 from .excel_dashboard import refresh_trends_dashboard
+from .financial_signals import build_financial_signal_sheet_df
 
 SUMMARY_SHEET = "📊 Résumé Financier Q1"
 AI_SHEET = "🤖 Analyse Stratégique"
 GLOSSAIRE_SHEET = "📖 Dictionnaire des KPIs"
 TRENDS_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Données Graphique"
+
+SIGNALS_SHEET = "Signaux Financiers"
 
 PERCENT_COLUMNS = {
     "Taux Abonn. Super",
@@ -422,7 +425,11 @@ def calculer_statistiques() -> dict | None:
     return stats
 
 
-def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
+def sauvegarder_rapport_excel(
+    stats: dict,
+    ia_report: str = None,
+    financial_signals: dict | None = None,
+) -> None:
     """
     Exporte les données d'engagement et les statistiques dans un fichier Excel (.xlsx)
     avec un design premium et l'analyse de l'IA.
@@ -499,6 +506,10 @@ def sauvegarder_rapport_excel(stats: dict, ia_report: str = None) -> None:
 
             if ia_report:
                 pd.DataFrame().to_excel(writer, sheet_name=AI_SHEET, index=False)
+
+            if financial_signals:
+                signal_sheet_df = build_financial_signal_sheet_df(financial_signals)
+                signal_sheet_df.to_excel(writer, sheet_name=SIGNALS_SHEET, index=False)
 
             df_glossaire = pd.DataFrame([
                 {"KPI": "Moyenne Streak (J)", "Définition": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité à long terme."},

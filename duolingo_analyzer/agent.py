@@ -1,18 +1,17 @@
 """
-Partie 3 : Agent IA Analyste
-Génère le rapport narratif via Google GenAI.
+Part 3: Financial interpretation agent.
+Generates an investor-style narrative via Google GenAI.
 """
+from __future__ import annotations
+
 from datetime import datetime
+
 from google import genai
 
-from .config import (
-    GOOGLE_API_KEY,
-    GEMINI_MODEL,
-)
+from .config import GEMINI_MODEL, GOOGLE_API_KEY
 
 
 def _safe_number(value, default=0.0):
-    """Convertit une valeur potentiellement None en nombre pour le formatage."""
     if value is None:
         return default
     try:
@@ -21,12 +20,18 @@ def _safe_number(value, default=0.0):
         return default
 
 
-def _executer_agent_adk(system_prompt: str, user_prompt: str) -> str:
-    """
-    Configure et exécute l'agent via le SDK google.genai officiel.
-    """
-    print(f"\n  🤖 Initialisation de l'agent GenAI (modèle: {GEMINI_MODEL})...")
-    
+def _format_ratio_pct(value) -> str:
+    if value is None:
+        return "N/D"
+    try:
+        return f"{float(value) * 100:.1f}%"
+    except (TypeError, ValueError):
+        return "N/D"
+
+
+def _executer_agent_adk(system_prompt: str, user_prompt: str) -> str | None:
+    print(f"\n  [IA] Initialisation de l'agent GenAI (modele: {GEMINI_MODEL})...")
+
     try:
         client = genai.Client(api_key=GOOGLE_API_KEY)
         response = client.models.generate_content(
@@ -34,93 +39,150 @@ def _executer_agent_adk(system_prompt: str, user_prompt: str) -> str:
             contents=user_prompt,
             config=genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                temperature=0.4,
+                temperature=0.35,
             ),
         )
         return response.text
-    except Exception as e:
-        print(f"\n  [ERREUR GENAI] {e}")
-        print("     Génération d'un rapport placeholder à la place.\n")
+    except Exception as exc:
+        print(f"\n  [ERREUR GENAI] {exc}")
+        print("     Generation d'un rapport placeholder a la place.\n")
         return None
 
 
-def generer_rapport_ia(stats: dict) -> str:
-    """
-    PARTIE 3 : Génère un rapport d'engagement formaté via l'Agent.
-    Sauvegarde le résultat dans rapport_quotidien.txt.
-    """
-    print("============================================================")
-    print("  PARTIE 3 — AGENT IA ANALYSTE (Google GenAI)")
-    print("============================================================")
+def _build_financial_signal_prompt(signal_package: dict) -> tuple[str, str]:
+    metadata = signal_package.get("metadata", {})
+    panel = signal_package.get("panel", {})
+    business = signal_package.get("business_signals", {})
+    proxy = signal_package.get("financial_proxy_signals", {})
 
     system_prompt = (
-        "Tu es un Analyste Financier Senior (Buy-Side) couvrant l'action Duolingo (NASDAQ: DUOL). "
-        "Ton objectif est d'analyser les indicateurs d'engagement quotidiens (Retention, taux d'abandon, DAU) "
-        "pour anticiper les résultats financiers du trimestre en cours (Q1 2026) et guider les décisions d'investissement. "
-        "Produis un rapport structuré avec des sections claires pour une intégration dans un tableau de bord Excel. "
-        "UTILISE EXCLUSIVEMENT les balises suivantes pour délimiter tes sections :\n"
-        "[TITRE] (Un titre financier percutant (ex: 'DUOL - Mise à jour Q1 2026'))\n"
-        "[RESUME] (Résumé de la thèse d'investissement basée sur l'engagement en 2-3 phrases)\n"
-        "[TENDANCES] (Impact des metriques de retention et de taux d'abandon sur le modele de revenus futurs)\n"
-        "[ATTENTION] (Risques d'exécution, essoufflement de l'engagement ou baisse d'utilisateurs monétisables)\n"
-        "[CONSEILS] (Recommandations pour les investisseurs : anticiper une hausse/baisse, points à surveiller)\n"
-        "Sois pro, direct, utilise un vocabulaire financier (guidance, top-line, MAU/DAU, conversion) et n'ajoute aucun texte en dehors des balises."
+        "Tu es un analyste buy-side specialise en signaux avances de monetisation et retention. "
+        "Tu recois un paquet de signaux structures derives d'un panel quotidien Duolingo. "
+        "Tu dois interpreter ces signaux comme un nowcast business et financier. "
+        "Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
+        "Tu restes prudent, tu relies comportement utilisateur et implications business, "
+        "et tu produis uniquement les sections suivantes dans cet ordre exact: "
+        "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]."
     )
-
-    date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))
-    moy = _safe_number(stats.get("moyenne_streak_jour"), 0)
-    actifs = int(_safe_number(stats.get("utilisateurs_actifs"), 0))
-    tombes = int(_safe_number(stats.get("streaks_tombes_zero"), 0))
-    total = int(_safe_number(stats.get("nb_profils_jour"), 0))
-    
-    retention = _safe_number(stats.get("taux_retention"), 0)
-    churn = _safe_number(stats.get("taux_churn"), 0)
-    sante = _safe_number(stats.get("score_sante_jour"), 0)
-    conversion = _safe_number(stats.get("taux_conversion_plus"), 0)
-    delta_xp = _safe_number(stats.get("delta_xp_moyen"), 0)
-    cohortes = stats.get("cohortes", {})
-    
-    hier_info = ""
-    if stats.get("moyenne_streak_hier") is not None:
-        evolution = _safe_number(moy, 0) - _safe_number(stats["moyenne_streak_hier"], 0)
-        hier_info = f"\n• Évolution moyenne vs hier : {evolution:+.1f} jours"
 
     user_prompt = (
-        f"Analyse ces métriques d'engagement d'un panel d'utilisateurs Duolingo pour le {date} "
-        f"dans l'optique des futurs résultats Q1 2026 :\n\n"
-        f"• Taille du panel analysé : {total} utilisateurs (répartis en 3 cohortes XP)\n"
-        f"• Score de Santé (Utilisateurs Actifs / Panel) : {sante:.1f}%\n"
-        f"• Taux de Rétention (vs hier) : {retention:.1f}%\n"
-        f"• Taux d'Abandon Global : {churn:.2f}%\n"
-        f"  - Abandon Débutants : {_safe_number(cohortes.get('Debutants', {}).get('churn'), 0):.1f}%\n"
-        f"  - Abandon Standard : {_safe_number(cohortes.get('Standard', {}).get('churn'), 0):.1f}%\n"
-        f"  - Abandon Super-Actifs : {_safe_number(cohortes.get('Super-Actifs', {}).get('churn'), 0):.1f}%\n"
-        f"• Taux de Conversion Estimé (Super Duolingo) : {conversion:.1f}%\n"
-        f"• Intensité d'Engagement (Delta XP Moyen) : +{delta_xp:.0f} XP/jour\n"
-        f"• Moyenne des streaks : {moy:.1f} jours{hier_info}\n\n"
-        "Génère le rapport structuré avec les balises demandées en adoptant un ton d'analyste financier."
+        f"Date de reference: {metadata.get('as_of_date', 'N/D')}\n"
+        f"Phase systeme: {metadata.get('phase', 'N/D')}\n"
+        f"Jours observes dans l'historique: {metadata.get('observed_days', 'N/D')}\n"
+        f"Panel cible: {panel.get('target_panel_size', 'N/D')}\n"
+        f"Utilisateurs observes aujourd'hui: {panel.get('observed_users_today', 'N/D')}\n"
+        f"Couverture panel: {_format_ratio_pct(panel.get('coverage_ratio'))}\n\n"
+        f"Active rate: {_format_ratio_pct(business.get('active_rate'))}\n"
+        f"Average streak: {business.get('avg_streak', 'N/D')}\n"
+        f"XP delta mean: {business.get('xp_delta_mean', 'N/D')}\n"
+        f"Churn rate: {_format_ratio_pct(business.get('churn_rate'))}\n"
+        f"Reactivation rate: {_format_ratio_pct(business.get('reactivation_rate'))}\n"
+        f"Super rate: {_format_ratio_pct(business.get('super_rate'))}\n"
+        f"Max rate: {_format_ratio_pct(business.get('max_rate'))}\n"
+        f"High-value retention rate: {_format_ratio_pct(business.get('high_value_retention_rate'))}\n\n"
+        f"Engagement quality index: {proxy.get('engagement_quality_index', 'N/D')}\n"
+        f"Engagement quality trend: {_format_ratio_pct(proxy.get('engagement_quality_trend'))}\n"
+        f"Premium momentum 14d: {_format_ratio_pct(proxy.get('premium_momentum_14d'))}\n"
+        f"Max momentum 14d: {_format_ratio_pct(proxy.get('max_momentum_14d'))}\n"
+        f"Churn trend 14d: {_format_ratio_pct(proxy.get('churn_trend_14d'))}\n"
+        f"Reactivation trend 7d: {_format_ratio_pct(proxy.get('reactivation_trend_7d'))}\n"
+        f"High-value retention trend: {_format_ratio_pct(proxy.get('high_value_retention_trend'))}\n"
+        f"Subscription momentum proxy: {proxy.get('subscription_momentum_proxy', 'N/D')}\n"
+        f"Monetization momentum index: {proxy.get('monetization_momentum_index', 'N/D')}\n"
+        f"Growth acceleration 7d: {proxy.get('growth_acceleration_7d', 'N/D')}\n"
+        f"Signal bias: {proxy.get('signal_bias', 'neutral')}\n"
+        f"Confidence level: {proxy.get('confidence_level', 'low')}\n"
+        f"Revenue beat probability: {proxy.get('revenue_beat_probability', 'N/D')}\n"
+        f"EBITDA beat probability: {proxy.get('ebitda_beat_probability', 'N/D')}\n"
+        f"Guidance raise probability: {proxy.get('guidance_raise_probability', 'N/D')}\n"
+        f"Main drivers: {', '.join(proxy.get('main_drivers', []))}\n"
+        f"Main risks: {', '.join(proxy.get('main_risks', []))}\n\n"
+        "Genere une lecture concise, analytique et orientee investisseur. "
+        "Privilegie l'interpretation plutot que la repetition brute des chiffres."
     )
 
-    print(f"\n  📝 System Prompt :\n     {system_prompt[:85]}...")
-    print(f"\n  📝 User Prompt :\n     {user_prompt[:80]}...\n")
+    return system_prompt, user_prompt
+
+
+def _build_legacy_prompt(stats: dict) -> tuple[str, str]:
+    date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))
+    moyenne_streak = _safe_number(stats.get("moyenne_streak_jour"), 0)
+    panel_total = int(_safe_number(stats.get("nb_profils_jour"), 0))
+    retention = _safe_number(stats.get("taux_retention"), 0)
+    churn = _safe_number(stats.get("taux_churn"), 0)
+    engagement = _safe_number(stats.get("score_sante_jour"), 0)
+    super_rate = _safe_number(stats.get("taux_conversion_plus"), 0)
+    delta_xp = _safe_number(stats.get("delta_xp_moyen"), 0)
+    cohortes = stats.get("cohortes", {})
+
+    system_prompt = (
+        "Tu es un analyste financier buy-side. "
+        "Tu dois interpreter des statistiques d'engagement Duolingo et produire uniquement "
+        "les sections [RESUME] [TENDANCES] [ATTENTION] [CONSEILS]."
+    )
+
+    user_prompt = (
+        f"Date: {date}\n"
+        f"Panel: {panel_total}\n"
+        f"Engagement score: {engagement:.1f}%\n"
+        f"Retention: {retention:.1f}%\n"
+        f"Churn: {churn:.1f}%\n"
+        f"Super rate: {super_rate:.1f}%\n"
+        f"Delta XP mean: {delta_xp:.0f}\n"
+        f"Average streak: {moyenne_streak:.1f}\n"
+        f"Debutants churn: {_safe_number(cohortes.get('Debutants', {}).get('churn'), 0):.1f}%\n"
+        f"Standard churn: {_safe_number(cohortes.get('Standard', {}).get('churn'), 0):.1f}%\n"
+        f"Super-Actifs churn: {_safe_number(cohortes.get('Super-Actifs', {}).get('churn'), 0):.1f}%\n"
+    )
+
+    return system_prompt, user_prompt
+
+
+def generer_rapport_ia(stats: dict, signal_package: dict | None = None) -> str:
+    print("============================================================")
+    print("  PARTIE 3 - AGENT IA ANALYSTE")
+    print("============================================================")
+
+    if signal_package:
+        system_prompt, user_prompt = _build_financial_signal_prompt(signal_package)
+    else:
+        system_prompt, user_prompt = _build_legacy_prompt(stats)
+
+    print(f"\n  [PROMPT] System Prompt:\n     {system_prompt[:100]}...")
+    print(f"\n  [PROMPT] User Prompt:\n     {user_prompt[:120]}...\n")
 
     rapport = None
-
     if not GOOGLE_API_KEY:
-        print("  ⚠️ Clé GOOGLE_API_KEY manquante dans l'environnement (.env).")
-        print("  Veuillez la configurer pour utiliser le véritable Agent.")
+        print("  [WARNING] GOOGLE_API_KEY manquante dans l'environnement (.env).")
     else:
         rapport = _executer_agent_adk(system_prompt, user_prompt)
 
     if not rapport:
-        rapport = (
-            f"📈 RAPPORT D'ENGAGEMENT (GÉNÉRÉ LOCALEMENT - PLACEHOLDER)\n\n"
-            f"Analyse du {date}:\n"
-            f"Sur notre panel de {total} utilisateurs, la longueur moyenne de\n"
-            f"série est de {moy:.1f} jours. {actifs} utilisateurs restent engagés.\n"
-            f"Aujourd'hui, {tombes} utilisateurs ont perdu leur rythme d'apprentissage."
-        )
+        if signal_package:
+            proxy = signal_package.get("financial_proxy_signals", {})
+            rapport = (
+                "[RESUME]\n"
+                "Le paquet de signaux financiers est bien genere, mais le modele supervise n'est pas encore branche.\n\n"
+                "[TENDANCES]\n"
+                f"Signal bias: {proxy.get('signal_bias', 'neutral')} | "
+                f"Monetization momentum index: {proxy.get('monetization_momentum_index', 'N/D')}.\n\n"
+                "[ATTENTION]\n"
+                "Les probabilites de beat/miss restent indisponibles tant que les labels trimestriels ne sont pas integres.\n\n"
+                "[CONSEILS]\n"
+                "Utiliser ce rapport comme couche d'interpretation proxy avant la phase de modelisation supervisee."
+            )
+        else:
+            date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))
+            rapport = (
+                "[RESUME]\n"
+                f"Lecture quotidienne pour le {date}.\n\n"
+                "[TENDANCES]\n"
+                "Le pipeline legacy reste fonctionnel.\n\n"
+                "[ATTENTION]\n"
+                "Le systeme de signaux financiers n'est pas encore branche sur cette execution.\n\n"
+                "[CONSEILS]\n"
+                "Passer au paquet de signaux structures pour une lecture plus investisseur."
+            )
 
-    print("\n  ✅ Analyse IA générée avec succès (prête pour Excel).")
-
+    print("\n  [OK] Analyse IA generee avec succes.")
     return rapport
