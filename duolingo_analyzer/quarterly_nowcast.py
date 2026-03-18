@@ -122,6 +122,68 @@ def _prob_from_score(score: float | None, confidence_label: str) -> float | None
     return round(adjusted, 4)
 
 
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return float(pd.Series(values, dtype="float64").median())
+
+
+def _historical_revenue_guidance_beats(labels_map: dict[str, pd.Series] | None) -> list[float]:
+    beats: list[float] = []
+    if not labels_map:
+        return beats
+
+    for quarter, row in labels_map.items():
+        previous_quarter = _previous_quarter(quarter)
+        previous_row = labels_map.get(previous_quarter) if previous_quarter else None
+        actual_revenue = _safe_float(row.get("actual_revenue_musd"))
+        guidance_revenue = _safe_float(previous_row.get("guidance_next_q_revenue_musd")) if previous_row is not None else None
+        if actual_revenue and guidance_revenue and guidance_revenue > 0:
+            beats.append(actual_revenue / guidance_revenue - 1.0)
+    return beats
+
+
+def _historical_revenue_qoq_growth(labels_map: dict[str, pd.Series] | None) -> list[float]:
+    growth_rates: list[float] = []
+    if not labels_map:
+        return growth_rates
+
+    for quarter, row in labels_map.items():
+        previous_quarter = _previous_quarter(quarter)
+        previous_row = labels_map.get(previous_quarter) if previous_quarter else None
+        actual_revenue = _safe_float(row.get("actual_revenue_musd"))
+        previous_revenue = _safe_float(previous_row.get("actual_revenue_musd")) if previous_row is not None else None
+        if actual_revenue and previous_revenue and previous_revenue > 0:
+            growth_rates.append(actual_revenue / previous_revenue - 1.0)
+    return growth_rates
+
+
+def _historical_ebitda_margins(labels_map: dict[str, pd.Series] | None) -> list[float]:
+    margins: list[float] = []
+    if not labels_map:
+        return margins
+
+    for row in labels_map.values():
+        actual_revenue = _safe_float(row.get("actual_revenue_musd"))
+        actual_ebitda = _safe_float(row.get("actual_adjusted_ebitda_musd"))
+        if actual_revenue and actual_ebitda and actual_revenue > 0:
+            margins.append(actual_ebitda / actual_revenue)
+    return margins
+
+
+def _historical_next_q_guidance_ratios(labels_map: dict[str, pd.Series] | None) -> list[float]:
+    ratios: list[float] = []
+    if not labels_map:
+        return ratios
+
+    for row in labels_map.values():
+        actual_revenue = _safe_float(row.get("actual_revenue_musd"))
+        next_q_guidance = _safe_float(row.get("guidance_next_q_revenue_musd"))
+        if actual_revenue and next_q_guidance and actual_revenue > 0:
+            ratios.append(next_q_guidance / actual_revenue)
+    return ratios
+
+
 def _load_labels_df() -> pd.DataFrame:
     if not QUARTERLY_LABELS_FILE.exists():
         return pd.DataFrame()
@@ -336,6 +398,47 @@ def _build_snapshot_for_quarter(
 
     confidence_label = _label_confidence(avg_coverage_ratio, observed_days)
     signal_bias = _label_signal(quarter_score)
+    revenue_prob = _prob_from_score(revenue_score, confidence_label)
+    ebitda_prob = _prob_from_score(ebitda_score, confidence_label)
+    guidance_prob = _prob_from_score(guidance_score, confidence_label)
+
+    revenue_guidance_beats = _historical_revenue_guidance_beats(labels_map)
+    revenue_qoq_growth = _historical_revenue_qoq_growth(labels_map)
+    ebitda_margins = _historical_ebitda_margins(labels_map)
+    next_q_guidance_ratios = _historical_next_q_guidance_ratios(labels_map)
+
+    median_guidance_beat = _median(revenue_guidance_beats)
+    median_qoq_growth = _median(revenue_qoq_growth)
+    median_ebitda_margin = _median(ebitda_margins)
+    median_next_q_guidance_ratio = _median(next_q_guidance_ratios)
+
+    previous_actual_revenue = _safe_float(previous_label_row.get("actual_revenue_musd")) if previous_label_row is not None else None
+
+    estimated_revenue = None
+    if revenue_guidance_reference and revenue_guidance_reference > 0:
+        base_beat = median_guidance_beat if median_guidance_beat is not None else 0.025
+        beat_adjustment = ((revenue_prob or 0.50) - 0.50) * 0.08
+        implied_beat = max(-0.03, min(0.08, base_beat + beat_adjustment))
+        estimated_revenue = revenue_guidance_reference * (1.0 + implied_beat)
+    elif previous_actual_revenue and previous_actual_revenue > 0:
+        base_growth = median_qoq_growth if median_qoq_growth is not None else 0.06
+        growth_adjustment = ((revenue_prob or 0.50) - 0.50) * 0.10
+        implied_growth = max(-0.05, min(0.15, base_growth + growth_adjustment))
+        estimated_revenue = previous_actual_revenue * (1.0 + implied_growth)
+
+    estimated_ebitda = None
+    if estimated_revenue and estimated_revenue > 0:
+        base_margin = median_ebitda_margin if median_ebitda_margin is not None else 0.29
+        margin_adjustment = ((ebitda_prob or 0.50) - 0.50) * 0.04
+        implied_margin = max(0.18, min(0.40, base_margin + margin_adjustment))
+        estimated_ebitda = estimated_revenue * implied_margin
+
+    estimated_next_q_guidance = None
+    if estimated_revenue and estimated_revenue > 0:
+        base_ratio = median_next_q_guidance_ratio if median_next_q_guidance_ratio is not None else 1.04
+        guidance_adjustment = ((guidance_prob or 0.50) - 0.50) * 0.04
+        implied_ratio = max(0.98, min(1.12, base_ratio + guidance_adjustment))
+        estimated_next_q_guidance = estimated_revenue * implied_ratio
 
     drivers: list[str] = []
     risks: list[str] = []
@@ -395,11 +498,14 @@ def _build_snapshot_for_quarter(
         "guidance_score_proxy": _round_or_none(guidance_score, 2),
         "quarter_signal_bias": signal_bias,
         "confidence_level": confidence_label,
-        "revenue_beat_probability_proxy": _prob_from_score(revenue_score, confidence_label),
-        "ebitda_beat_probability_proxy": _prob_from_score(ebitda_score, confidence_label),
-        "guidance_raise_probability_proxy": _prob_from_score(guidance_score, confidence_label),
+        "revenue_beat_probability_proxy": revenue_prob,
+        "ebitda_beat_probability_proxy": ebitda_prob,
+        "guidance_raise_probability_proxy": guidance_prob,
         "revenue_guidance_reference_musd": _round_or_none(revenue_guidance_reference, 2),
         "revenue_guidance_reference_quarter": previous_quarter,
+        "estimated_revenue_musd": _round_or_none(estimated_revenue, 2),
+        "estimated_ebitda_musd": _round_or_none(estimated_ebitda, 2),
+        "estimated_next_q_guidance_musd": _round_or_none(estimated_next_q_guidance, 2),
         "main_drivers": drivers[:4],
         "main_risks": risks[:4],
     }
@@ -608,10 +714,13 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
         "revenue_guidance_reference_quarter": current_snapshot.get("revenue_guidance_reference_quarter"),
         "revenue_beat_probability_proxy": current_snapshot.get("revenue_beat_probability_proxy"),
         "revenue_beat_guidance_probability": current_snapshot.get("revenue_beat_probability_proxy"),
+        "estimated_revenue_musd": current_snapshot.get("estimated_revenue_musd"),
         "ebitda_beat_probability_proxy": current_snapshot.get("ebitda_beat_probability_proxy"),
         "ebitda_beat_probability": current_snapshot.get("ebitda_beat_probability_proxy"),
+        "estimated_ebitda_musd": current_snapshot.get("estimated_ebitda_musd"),
         "guidance_raise_probability_proxy": current_snapshot.get("guidance_raise_probability_proxy"),
         "guidance_raise_probability": current_snapshot.get("guidance_raise_probability_proxy"),
+        "estimated_next_q_guidance_musd": current_snapshot.get("estimated_next_q_guidance_musd"),
         "main_drivers": current_snapshot.get("main_drivers", []),
         "main_risks": current_snapshot.get("main_risks", []),
     }

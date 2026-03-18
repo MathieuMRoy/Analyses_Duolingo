@@ -861,6 +861,25 @@ def sauvegarder_rapport_excel(
                     align=Alignment(horizontal="center", vertical="center", wrap_text=True),
                 )
 
+            def format_estimation_vs_guidance_note(
+                estimated_value: object,
+                guidance_value: object,
+                *,
+                prefix: str = "Est.",
+                guidance_label: str = "Guidance",
+            ) -> str:
+                estimated_text = (
+                    f"{_pretty_fr_number(estimated_value, 1)} M$"
+                    if isinstance(estimated_value, numbers.Number)
+                    else "N/D"
+                )
+                guidance_text = (
+                    f"{_pretty_fr_number(guidance_value, 1)} M$"
+                    if isinstance(guidance_value, numbers.Number)
+                    else "N/D"
+                )
+                return f"{prefix} {estimated_text} vs {guidance_label} {guidance_text}"
+
             bias_label = _label_signal_bias(proxy.get("signal_bias"))
             confidence_label = _label_confidence(proxy.get("confidence_level"))
             coverage_ratio = panel.get("coverage_ratio")
@@ -1207,6 +1226,9 @@ def sauvegarder_rapport_excel(
             primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites actuelles de calibration"
             revenue_reference = model.get("revenue_guidance_reference_musd")
             revenue_reference_quarter = model.get("revenue_guidance_reference_quarter")
+            estimated_revenue = model.get("estimated_revenue_musd")
+            estimated_ebitda = model.get("estimated_ebitda_musd")
+            estimated_next_q_guidance = model.get("estimated_next_q_guidance_musd")
             if isinstance(revenue_reference, numbers.Number):
                 reference_label = (
                     f"la cible de revenus communiquée par le management ({_pretty_fr_number(revenue_reference, 1)} M$)"
@@ -1260,10 +1282,48 @@ def sauvegarder_rapport_excel(
 
             write_card("A", "B", 5, "Trimestre", str(metadata.get("current_quarter", "N/D")), "Fenêtre actuellement suivie", NAVY)
             write_card("C", "D", 5, "Taux utilisateurs actifs", _pretty_ratio_pct(active_rate_est, 1), "Part moyenne du panel demeurée active", active_fill)
-            write_card("E", "F", 5, "Prob. beat revenus", _pretty_ratio_pct(revenue_prob, 1), "Vs cible de revenus communiquée", DUO_BLUE)
-            write_card("G", "H", 5, "Prob. beat EBITDA", _pretty_ratio_pct(ebitda_prob, 1), "Monétisation, engagement et rétention", NAVY)
+            write_card(
+                "E",
+                "F",
+                5,
+                "Prob. beat revenus",
+                _pretty_ratio_pct(revenue_prob, 1),
+                format_estimation_vs_guidance_note(
+                    estimated_revenue,
+                    revenue_reference,
+                    prefix="Est.",
+                    guidance_label="guidance",
+                ),
+                DUO_BLUE,
+            )
+            write_card(
+                "G",
+                "H",
+                5,
+                "Prob. beat EBITDA",
+                _pretty_ratio_pct(ebitda_prob, 1),
+                (
+                    f"Est. {_pretty_fr_number(estimated_ebitda, 1)} M$"
+                    if isinstance(estimated_ebitda, numbers.Number)
+                    else "Est. N/D"
+                ),
+                NAVY,
+            )
 
-            write_card("A", "B", 10, "Prob. guidance raise", _pretty_ratio_pct(guidance_prob, 1), "Probabilité implicite de relever la guidance", DUO_GREEN)
+            write_card(
+                "A",
+                "B",
+                10,
+                "Prob. guidance raise",
+                _pretty_ratio_pct(guidance_prob, 1),
+                format_estimation_vs_guidance_note(
+                    estimated_next_q_guidance,
+                    revenue_reference,
+                    prefix="Guide N+1 est.",
+                    guidance_label="base",
+                ),
+                DUO_GREEN,
+            )
             write_card("C", "D", 10, "Confiance", confidence_label, "Couverture + profondeur historique", confidence_fill)
             write_card("E", "F", 10, "Score trimestre", _pretty_score(quarter_score, 1), "Score synthétique du trimestre", NAVY)
             write_card("G", "H", 10, "Couverture moyenne", _pretty_ratio_pct(avg_coverage, 1), "Moyenne du panel sur le trimestre", DUO_BLUE)
