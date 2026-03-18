@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import shutil
 import numbers
+import re
 import pandas as pd
 
 from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE, REPORT_DIR, now_toronto
@@ -303,6 +304,59 @@ def _label_confidence(value: object) -> str:
         "low": "Faible",
     }
     return mapping.get(str(value or "").strip().lower(), "N/D")
+
+
+def _normalize_text(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).replace("\r", "\n").replace("•", "-")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{2,}", "\n", text)
+    return text.strip()
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    clean = _normalize_text(text)
+    if len(clean) <= max_chars:
+        return clean
+    shortened = clean[: max_chars - 1].rstrip(" ,;:-")
+    return f"{shortened}…"
+
+
+def _compact_summary_text(text: object, max_sentences: int = 2, max_chars: int = 180) -> str:
+    clean = _normalize_text(text)
+    if not clean:
+        return "-"
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip()]
+    compact = " ".join(sentences[:max_sentences]) if sentences else clean
+    return _truncate_text(compact, max_chars)
+
+
+def _compact_bullet_text(text: object, max_items: int = 2, max_chars: int = 95) -> str:
+    clean = _normalize_text(text)
+    if not clean:
+        return "-"
+
+    items: list[str] = []
+    for raw_line in clean.splitlines():
+        candidate = raw_line.lstrip("-* ").strip()
+        if candidate:
+            items.append(candidate)
+
+    if not items:
+        items = [part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip()]
+
+    compact_items: list[str] = []
+    for item in items:
+        shortened = _truncate_text(item, max_chars)
+        if shortened and shortened not in compact_items:
+            compact_items.append(shortened)
+        if len(compact_items) >= max_items:
+            break
+
+    if not compact_items:
+        return "-"
+    return "\n".join(f"- {item}" for item in compact_items)
 
 
 def calculer_statistiques() -> dict | None:
@@ -795,14 +849,14 @@ def sauvegarder_rapport_excel(
             drivers = proxy.get("main_drivers") or ["Aucun driver majeur identifie pour l'instant."]
             risks = proxy.get("main_risks") or ["Aucun risque majeur identifie pour l'instant."]
             summary_text = (
-                f"Le signal du jour ressort {bias_label.lower()} avec un niveau de confiance {confidence_label.lower()}. "
-                f"Le momentum de monetisation ressort a {_pretty_score(proxy.get('monetization_momentum_index'))}, "
-                f"tandis que la qualite d'engagement se situe a {_pretty_score(proxy.get('engagement_quality_index'))}. "
-                f"La dynamique premium 14j ressort a {_pretty_delta_pts(proxy.get('premium_momentum_14d'))} "
-                f"et la tendance de churn a {_pretty_delta_pts(proxy.get('churn_trend_14d'))}."
+                f"Signal {bias_label.lower()} avec confiance {confidence_label.lower()}. "
+                f"Monetisation {_pretty_score(proxy.get('monetization_momentum_index'))}, "
+                f"engagement {_pretty_score(proxy.get('engagement_quality_index'))}, "
+                f"premium 14j {_pretty_delta_pts(proxy.get('premium_momentum_14d'))}."
             )
             if ai_sections["RESUME"]:
                 summary_text = ai_sections["RESUME"]
+            summary_text = _compact_summary_text(summary_text, max_sentences=2, max_chars=170)
 
             bias_fill = {
                 "Favorable": DUO_GREEN,
@@ -887,7 +941,7 @@ def sauvegarder_rapport_excel(
 
             write_box("A15:H15", "Lecture investisseur", fill=NAVY, font_color=WHITE, size=11, bold=True)
             write_box(
-                "A16:H18",
+                "A16:H17",
                 summary_text,
                 fill=WHITE,
                 font_color="000000",
@@ -897,13 +951,21 @@ def sauvegarder_rapport_excel(
 
             left_title = "Tendances IA" if ai_sections["TENDANCES"] else "Main Drivers"
             right_title = "Points d'attention" if ai_sections["ATTENTION"] else "Main Risks"
-            left_body = ai_sections["TENDANCES"] or "\n".join(f"- {item}" for item in drivers)
-            right_body = ai_sections["ATTENTION"] or "\n".join(f"- {item}" for item in risks)
+            left_body = _compact_bullet_text(
+                ai_sections["TENDANCES"] or "\n".join(f"- {item}" for item in drivers),
+                max_items=2,
+                max_chars=90,
+            )
+            right_body = _compact_bullet_text(
+                ai_sections["ATTENTION"] or "\n".join(f"- {item}" for item in risks),
+                max_items=2,
+                max_chars=90,
+            )
 
-            write_box("A20:D20", left_title, fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
-            write_box("E20:H20", right_title, fill="FF6B6B", font_color=WHITE, size=11, bold=True)
+            write_box("A19:D19", left_title, fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
+            write_box("E19:H19", right_title, fill="FF6B6B", font_color=WHITE, size=11, bold=True)
             write_box(
-                "A21:D25",
+                "A20:D22",
                 left_body,
                 fill=WHITE,
                 font_color="000000",
@@ -911,7 +973,7 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
             write_box(
-                "E21:H25",
+                "E20:H22",
                 right_body,
                 fill=WHITE,
                 font_color="000000",
@@ -920,20 +982,21 @@ def sauvegarder_rapport_excel(
             )
 
             if ai_sections["CONSEILS"]:
-                write_box("A27:H27", "Conclusion IA", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
+                conclusion_text = _compact_summary_text(ai_sections["CONSEILS"], max_sentences=2, max_chars=160)
+                write_box("A24:H24", "Conclusion IA", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
                 write_box(
-                    "A28:H31",
-                    ai_sections["CONSEILS"],
+                    "A25:H26",
+                    conclusion_text,
                     fill=LIGHT_GREY,
                     font_color="000000",
                     size=10,
                     align=Alignment(horizontal="left", vertical="top", wrap_text=True),
                 )
-                model_header_row = 33
-                model_start_row = 34
+                model_header_row = 28
+                model_start_row = 29
             else:
-                model_header_row = 27
-                model_start_row = 28
+                model_header_row = 24
+                model_start_row = 25
 
             write_box(f"A{model_header_row}:H{model_header_row}", "Etat du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
             model_rows = [

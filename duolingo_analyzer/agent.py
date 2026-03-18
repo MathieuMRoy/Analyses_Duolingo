@@ -62,7 +62,13 @@ def _build_financial_signal_prompt(signal_package: dict) -> tuple[str, str]:
         "Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
         "Tu restes prudent, tu relies comportement utilisateur et implications business, "
         "et tu produis uniquement les sections suivantes dans cet ordre exact: "
-        "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]."
+        "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]. "
+        "Style tres court et orienté investisseur. "
+        "[RESUME]: 2 phrases maximum. "
+        "[TENDANCES]: 2 puces maximum. "
+        "[ATTENTION]: 2 puces maximum. "
+        "[CONSEILS]: 2 phrases maximum. "
+        "Evite de repeter les chiffres bruts inutilement."
     )
 
     user_prompt = (
@@ -97,7 +103,8 @@ def _build_financial_signal_prompt(signal_package: dict) -> tuple[str, str]:
         f"Guidance raise probability: {proxy.get('guidance_raise_probability', 'N/D')}\n"
         f"Main drivers: {', '.join(proxy.get('main_drivers', []))}\n"
         f"Main risks: {', '.join(proxy.get('main_risks', []))}\n\n"
-        "Genere une lecture concise, analytique et orientee investisseur. "
+        "Genere une lecture tres concise, analytique et orientee investisseur. "
+        "Maximum total vise: 8 lignes. "
         "Privilegie l'interpretation plutot que la repetition brute des chiffres."
     )
 
@@ -162,14 +169,14 @@ def generer_rapport_ia(stats: dict, signal_package: dict | None = None) -> str:
             proxy = signal_package.get("financial_proxy_signals", {})
             rapport = (
                 "[RESUME]\n"
-                "Le paquet de signaux financiers est bien genere, mais le modele supervise n'est pas encore branche.\n\n"
+                "Le signal proxy est disponible, mais le modele supervise n'est pas encore branche.\n\n"
                 "[TENDANCES]\n"
-                f"Signal bias: {proxy.get('signal_bias', 'neutral')} | "
-                f"Monetization momentum index: {proxy.get('monetization_momentum_index', 'N/D')}.\n\n"
+                f"- Signal bias: {proxy.get('signal_bias', 'neutral')}.\n"
+                f"- Momentum monetisation: {proxy.get('monetization_momentum_index', 'N/D')}.\n\n"
                 "[ATTENTION]\n"
-                "Les probabilites de beat/miss restent indisponibles tant que les labels trimestriels ne sont pas integres.\n\n"
+                "- Les probabilites de beat/miss restent indisponibles sans labels trimestriels.\n\n"
                 "[CONSEILS]\n"
-                "Utiliser ce rapport comme couche d'interpretation proxy avant la phase de modelisation supervisee."
+                "Utiliser ce rapport comme couche proxy avant la modelisation supervisee."
             )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))
