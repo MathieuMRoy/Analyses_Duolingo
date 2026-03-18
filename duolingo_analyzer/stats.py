@@ -291,6 +291,26 @@ def _pretty_score(value: object, digits: int = 1) -> str:
         return "N/D"
 
 
+def _format_estimation_vs_guidance_note(
+    estimated_value: object,
+    guidance_value: object,
+    *,
+    prefix: str = "Est.",
+    guidance_label: str = "Guidance",
+) -> str:
+    estimated_text = (
+        f"{_pretty_fr_number(estimated_value, 1)} M$"
+        if isinstance(estimated_value, numbers.Number)
+        else "N/D"
+    )
+    guidance_text = (
+        f"{_pretty_fr_number(guidance_value, 1)} M$"
+        if isinstance(guidance_value, numbers.Number)
+        else "N/D"
+    )
+    return f"{prefix} {estimated_text} vs {guidance_label} {guidance_text}"
+
+
 def _label_signal_bias(value: object) -> str:
     mapping = {
         "favorable": "Favorable",
@@ -861,25 +881,6 @@ def sauvegarder_rapport_excel(
                     align=Alignment(horizontal="center", vertical="center", wrap_text=True),
                 )
 
-            def format_estimation_vs_guidance_note(
-                estimated_value: object,
-                guidance_value: object,
-                *,
-                prefix: str = "Est.",
-                guidance_label: str = "Guidance",
-            ) -> str:
-                estimated_text = (
-                    f"{_pretty_fr_number(estimated_value, 1)} M$"
-                    if isinstance(estimated_value, numbers.Number)
-                    else "N/D"
-                )
-                guidance_text = (
-                    f"{_pretty_fr_number(guidance_value, 1)} M$"
-                    if isinstance(guidance_value, numbers.Number)
-                    else "N/D"
-                )
-                return f"{prefix} {estimated_text} vs {guidance_label} {guidance_text}"
-
             bias_label = _label_signal_bias(proxy.get("signal_bias"))
             confidence_label = _label_confidence(proxy.get("confidence_level"))
             coverage_ratio = panel.get("coverage_ratio")
@@ -1288,7 +1289,7 @@ def sauvegarder_rapport_excel(
                 5,
                 "Prob. beat revenus",
                 _pretty_ratio_pct(revenue_prob, 1),
-                format_estimation_vs_guidance_note(
+                _format_estimation_vs_guidance_note(
                     estimated_revenue,
                     revenue_reference,
                     prefix="Est.",
@@ -1316,7 +1317,7 @@ def sauvegarder_rapport_excel(
                 10,
                 "Prob. guidance raise",
                 _pretty_ratio_pct(guidance_prob, 1),
-                format_estimation_vs_guidance_note(
+                _format_estimation_vs_guidance_note(
                     estimated_next_q_guidance,
                     revenue_reference,
                     prefix="Guide N+1 est.",
