@@ -328,8 +328,21 @@ def _compact_summary_text(text: object, max_sentences: int = 2, max_chars: int =
     if not clean:
         return "-"
     sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip()]
-    compact = " ".join(sentences[:max_sentences]) if sentences else clean
-    return _truncate_text(compact, max_chars)
+    if not sentences:
+        return clean
+
+    selected: list[str] = []
+    current_length = 0
+    for sentence in sentences:
+        candidate_length = current_length + (1 if selected else 0) + len(sentence)
+        if selected and candidate_length > max_chars:
+            break
+        selected.append(sentence)
+        current_length = candidate_length
+        if len(selected) >= max_sentences:
+            break
+
+    return " ".join(selected) if selected else sentences[0]
 
 
 def _compact_bullet_text(text: object, max_items: int = 2, max_chars: int = 95) -> str:
@@ -347,10 +360,14 @@ def _compact_bullet_text(text: object, max_items: int = 2, max_chars: int = 95) 
         items = [part.strip() for part in re.split(r"(?<=[.!?])\s+", clean) if part.strip()]
 
     compact_items: list[str] = []
+    current_length = 0
     for item in items:
-        shortened = _truncate_text(item, max_chars)
-        if shortened and shortened not in compact_items:
-            compact_items.append(shortened)
+        candidate_length = current_length + (1 if compact_items else 0) + len(item)
+        if compact_items and candidate_length > max_chars:
+            break
+        if item and item not in compact_items:
+            compact_items.append(item)
+            current_length = candidate_length
         if len(compact_items) >= max_items:
             break
 
@@ -941,7 +958,7 @@ def sauvegarder_rapport_excel(
 
             write_box("A15:H15", "Lecture investisseur", fill=NAVY, font_color=WHITE, size=11, bold=True)
             write_box(
-                "A16:H17",
+                "A16:H18",
                 summary_text,
                 fill=WHITE,
                 font_color="000000",
@@ -962,10 +979,10 @@ def sauvegarder_rapport_excel(
                 max_chars=90,
             )
 
-            write_box("A19:D19", left_title, fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
-            write_box("E19:H19", right_title, fill="FF6B6B", font_color=WHITE, size=11, bold=True)
+            write_box("A20:D20", left_title, fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
+            write_box("E20:H20", right_title, fill="FF6B6B", font_color=WHITE, size=11, bold=True)
             write_box(
-                "A20:D22",
+                "A21:D24",
                 left_body,
                 fill=WHITE,
                 font_color="000000",
@@ -973,7 +990,7 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
             write_box(
-                "E20:H22",
+                "E21:H24",
                 right_body,
                 fill=WHITE,
                 font_color="000000",
@@ -983,20 +1000,20 @@ def sauvegarder_rapport_excel(
 
             if ai_sections["CONSEILS"]:
                 conclusion_text = _compact_summary_text(ai_sections["CONSEILS"], max_sentences=2, max_chars=160)
-                write_box("A24:H24", "Conclusion IA", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
+                write_box("A26:H26", "Conclusion IA", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
                 write_box(
-                    "A25:H26",
+                    "A27:H29",
                     conclusion_text,
                     fill=LIGHT_GREY,
                     font_color="000000",
                     size=10,
                     align=Alignment(horizontal="left", vertical="top", wrap_text=True),
                 )
-                model_header_row = 28
-                model_start_row = 29
+                model_header_row = 31
+                model_start_row = 32
             else:
-                model_header_row = 24
-                model_start_row = 25
+                model_header_row = 26
+                model_start_row = 27
 
             write_box(f"A{model_header_row}:H{model_header_row}", "Etat du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
             model_rows = [
@@ -1048,14 +1065,13 @@ def sauvegarder_rapport_excel(
                 ws.row_dimensions[row_idx].height = 28
                 ws.row_dimensions[row_idx + 1].height = 26
                 ws.row_dimensions[row_idx + 2].height = 22
-            ws.row_dimensions[16].height = 32
-            ws.row_dimensions[17].height = 32
-            ws.row_dimensions[18].height = 20
-            for row_idx in range(20, 23):
+            for row_idx in range(16, 19):
+                ws.row_dimensions[row_idx].height = 34
+            for row_idx in range(21, 25):
                 ws.row_dimensions[row_idx].height = 30
             if ai_sections["CONSEILS"]:
-                ws.row_dimensions[25].height = 30
-                ws.row_dimensions[26].height = 30
+                for row_idx in range(27, 30):
+                    ws.row_dimensions[row_idx].height = 28
             for row_idx in range(hypotheses_row + 1, hypotheses_row + 5):
                 ws.row_dimensions[row_idx].height = 22
 
@@ -1329,6 +1345,26 @@ def sauvegarder_rapport_excel(
 
         wb.save(RAPPORT_EXCEL_FILE)
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
+        wb = load_workbook(RAPPORT_EXCEL_FILE)
+        if SIGNALS_RAW_SHEET in wb.sheetnames:
+            wb[SIGNALS_RAW_SHEET].sheet_state = "hidden"
+        if CHART_DATA_SHEET in wb.sheetnames:
+            wb[CHART_DATA_SHEET].sheet_state = "hidden"
+        ordered_sheet_names = [
+            SUMMARY_SHEET,
+            SIGNALS_SHEET,
+            TRENDS_SHEET,
+            GLOSSAIRE_SHEET,
+            SIGNALS_RAW_SHEET,
+            CHART_DATA_SHEET,
+        ]
+        wb._sheets = sorted(
+            wb._sheets,
+            key=lambda sheet: ordered_sheet_names.index(sheet.title)
+            if sheet.title in ordered_sheet_names
+            else len(ordered_sheet_names),
+        )
+        wb.save(RAPPORT_EXCEL_FILE)
         google_drive_file = _copier_rapport_vers_google_drive(RAPPORT_EXCEL_FILE)
 
         print("  ✅ Rapport Excel Premium sauvegardé dans :")

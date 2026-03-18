@@ -615,7 +615,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
 
     chart_ws = wb.create_sheet(CHART_DATA_SHEET)
     trend_index = _sheet_index(wb, "📖 Dictionnaire des KPIs", len(wb.sheetnames))
-    trend_ws = wb.create_sheet(TREND_SHEET, trend_index + 1)
+    trend_ws = wb.create_sheet(TREND_SHEET, trend_index)
 
     chart_ws.append(["Date", "Taux Abonn. Super"])
     for row in global_df.itertuples(index=False):
