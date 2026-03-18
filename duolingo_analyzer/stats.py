@@ -311,6 +311,82 @@ def _format_estimation_vs_guidance_note(
     return f"{prefix} {estimated_text} vs {guidance_label} {guidance_text}"
 
 
+def _build_quarterly_model_explainer(
+    *,
+    revenue_prob: object,
+    guidance_prob: object,
+    revenue_reference: object,
+    drivers: list[object],
+    risks: list[object],
+) -> str:
+    primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique récente du panel"
+    primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites actuelles de calibration"
+
+    if isinstance(revenue_reference, numbers.Number):
+        reference_text = f"{_pretty_fr_number(revenue_reference, 1)} M$"
+        revenue_sentence = (
+            f"La probabilité de beat revenus ressort à {_pretty_ratio_pct(revenue_prob, 1)} ; "
+            f"elle mesure la chance implicite de dépasser la référence interne du trimestre, "
+            f"actuellement ancrée sur la guidance management de {reference_text}."
+        )
+        guidance_sentence = (
+            f"La probabilité de guidance raise ressort à {_pretty_ratio_pct(guidance_prob, 1)} et reste surtout portée par {primary_driver}."
+            if _parse_float(guidance_prob) is not None and _parse_float(guidance_prob) >= 0.5
+            else f"La probabilité de guidance raise ressort à {_pretty_ratio_pct(guidance_prob, 1)} et reste freinée par {primary_risk}."
+        )
+        return (
+            "Notre modèle trimestriel combine la monétisation, l'engagement, la rétention, le churn, "
+            "les réactivations et la couverture du panel. "
+            + revenue_sentence
+            + " "
+            + guidance_sentence
+        )
+
+    return (
+        "Notre modèle trimestriel combine la monétisation, l'engagement, la rétention, le churn, "
+        "les réactivations et la couverture du panel. "
+        f"La probabilité de beat revenus ressort à {_pretty_ratio_pct(revenue_prob, 1)} et s'appuie encore sur une référence interne de transition. "
+        f"La probabilité de guidance raise ressort à {_pretty_ratio_pct(guidance_prob, 1)} et reste pour l'instant surtout influencée par {primary_risk}."
+    )
+
+
+def _build_quarterly_model_explainer(
+    *,
+    revenue_prob: object,
+    guidance_prob: object,
+    revenue_reference: object,
+    drivers: list[object],
+    risks: list[object],
+) -> str:
+    primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique récente du panel"
+    primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites actuelles de calibration"
+
+    base_sentence = (
+        "Notre modèle trimestriel combine la monétisation, l'engagement, la rétention, "
+        "le churn, les réactivations et la couverture du panel."
+    )
+
+    if isinstance(revenue_reference, numbers.Number):
+        reference_text = f"{_pretty_fr_number(revenue_reference, 1)} M$"
+        revenue_sentence = (
+            f"La probabilité implicite de battre les revenus du trimestre ressort à {_pretty_ratio_pct(revenue_prob, 1)} ; "
+            f"elle compare notre estimation à la référence interne du trimestre, actuellement ancrée sur la guidance management de {reference_text}."
+        )
+    else:
+        revenue_sentence = (
+            f"La probabilité implicite de battre les revenus du trimestre ressort à {_pretty_ratio_pct(revenue_prob, 1)} ; "
+            "elle s'appuie encore sur une référence interne de transition, faute de guidance exploitable dans l'historique."
+        )
+
+    guidance_sentence = (
+        f"La probabilité implicite d'un relèvement de guidance ressort à {_pretty_ratio_pct(guidance_prob, 1)} et reste surtout portée par {primary_driver}."
+        if _parse_float(guidance_prob) is not None and _parse_float(guidance_prob) >= 0.5
+        else f"La probabilité implicite d'un relèvement de guidance ressort à {_pretty_ratio_pct(guidance_prob, 1)} et reste freinée par {primary_risk}."
+    )
+
+    return base_sentence + " " + revenue_sentence + " " + guidance_sentence
+
+
 def _label_signal_bias(value: object) -> str:
     mapping = {
         "favorable": "Favorable",
@@ -332,6 +408,8 @@ def _label_confidence(value: object) -> str:
 def _normalize_text(value: object) -> str:
     if value is None:
         return ""
+    if isinstance(value, str):
+        value = value.replace("**", "")
     text = str(value).replace("\r", "\n").replace("•", "-")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{2,}", "\n", text)
@@ -397,6 +475,27 @@ def _compact_bullet_text(text: object, max_items: int = 2, max_chars: int = 95) 
     if not compact_items:
         return "-"
     return "\n".join(f"- {item}" for item in compact_items)
+
+
+def _normalize_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        value = value.replace("**", "")
+    text = str(value).replace("\r", "\n")
+    text = text.replace("•", "-").replace("â€¢", "-")
+    text = text.replace("…", "...").replace("â€¦", "...")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{2,}", "\n", text)
+    return text.strip()
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    clean = _normalize_text(text)
+    if len(clean) <= max_chars:
+        return clean
+    shortened = clean[: max_chars - 3].rstrip(" ,;:-")
+    return f"{shortened}..."
 
 
 def calculer_statistiques() -> dict | None:
@@ -887,7 +986,7 @@ def sauvegarder_rapport_excel(
             observed_users = panel.get("observed_users_today")
             target_users = panel.get("target_panel_size")
             summary_lines = [
-                f"Date de reference : {metadata.get('as_of_date', 'N/D')}",
+                f"Date de référence : {metadata.get('as_of_date', 'N/D')}",
                 f"Panel observe : {_pretty_fr_number(observed_users, 0)} / {_pretty_fr_number(target_users, 0)} "
                 f"({_pretty_ratio_pct(coverage_ratio, 1)})",
                 f"Signal global : {bias_label} | Confiance : {confidence_label}",
@@ -1186,7 +1285,10 @@ def sauvegarder_rapport_excel(
 
             bias_label = str(model.get("quarter_signal_bias") or "N/D")
             confidence_label = str(model.get("confidence_level") or "N/D")
-            revenue_prob = model.get("revenue_beat_guidance_probability", model.get("revenue_beat_probability_proxy"))
+            revenue_prob = model.get(
+                "revenue_beat_probability",
+                model.get("revenue_beat_guidance_probability", model.get("revenue_beat_probability_proxy")),
+            )
             ebitda_prob = model.get("ebitda_beat_probability", model.get("ebitda_beat_probability_proxy"))
             guidance_prob = model.get("guidance_raise_probability", model.get("guidance_raise_probability_proxy"))
             observed_days = current.get("observed_days")
@@ -1219,11 +1321,11 @@ def sauvegarder_rapport_excel(
                 f"Trimestre suivi : {metadata.get('current_quarter', 'N/D')}",
                 f"Jours observés : {_pretty_fr_number(observed_days, 0)}",
                 f"Couverture moyenne : {_pretty_ratio_pct(avg_coverage, 1)}",
-                f"Signal trimestriel : {bias_label}",
+                f"Lecture trimestrielle : {bias_label}",
             ]
             drivers = model.get("main_drivers") or ["Le modèle a encore trop peu d'historique pour faire émerger un moteur dominant."]
             risks = model.get("main_risks") or ["Le principal risque reste le manque d'historique de guidance pour calibrer finement le modèle."]
-            primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique recente du panel"
+            primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique récente du panel"
             primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites actuelles de calibration"
             revenue_reference = model.get("revenue_guidance_reference_musd")
             revenue_reference_quarter = model.get("revenue_guidance_reference_quarter")
@@ -1258,8 +1360,14 @@ def sauvegarder_rapport_excel(
                 + " "
                 + guidance_clause
             )
-            if ai_sections["MODELE"]:
-                summary_text = ai_sections["MODELE"]
+            fallback_summary_text = _build_quarterly_model_explainer(
+                revenue_prob=revenue_prob,
+                guidance_prob=guidance_prob,
+                revenue_reference=revenue_reference,
+                drivers=drivers,
+                risks=risks,
+            )
+            summary_text = _normalize_text(ai_sections["MODELE"]) if ai_sections["MODELE"] else fallback_summary_text
 
             next_step = readiness.get("next_step") or "Completer les labels trimestriels avant calibration supervisee."
 
@@ -1332,7 +1440,7 @@ def sauvegarder_rapport_excel(
             write_box("A15:H15", "Lecture du modèle", fill=NAVY, font_color=WHITE, size=11, bold=True)
             write_box(
                 "A16:H18",
-                _compact_summary_text(summary_text, max_sentences=2, max_chars=240),
+                _compact_summary_text(summary_text, max_sentences=2, max_chars=280),
                 fill=WHITE,
                 font_color="000000",
                 size=11,
@@ -1421,7 +1529,7 @@ def sauvegarder_rapport_excel(
                 values = [
                     snapshot.get("quarter"),
                     snapshot.get("quarter_signal_score"),
-                    snapshot.get("revenue_beat_guidance_probability", snapshot.get("revenue_beat_probability_proxy")),
+                    snapshot.get("revenue_beat_probability", snapshot.get("revenue_beat_guidance_probability", snapshot.get("revenue_beat_probability_proxy"))),
                     snapshot.get("ebitda_beat_probability", snapshot.get("ebitda_beat_probability_proxy")),
                     snapshot.get("guidance_raise_probability", snapshot.get("guidance_raise_probability_proxy")),
                     snapshot.get("quarter_signal_bias"),

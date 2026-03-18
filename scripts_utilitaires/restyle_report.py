@@ -7,6 +7,7 @@ import re
 import sys
 
 from openpyxl import load_workbook
+from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
@@ -196,8 +197,13 @@ def restyle_report(report_path: Path) -> None:
         # Auto-fit columns
         for col in ws.columns:
             max_length = 0
-            column = col[0].column_letter
+            first_real_cell = next((cell for cell in col if not isinstance(cell, MergedCell)), None)
+            if first_real_cell is None:
+                continue
+            column = first_real_cell.column_letter
             for cell in col:
+                if isinstance(cell, MergedCell):
+                    continue
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))

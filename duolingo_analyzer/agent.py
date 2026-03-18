@@ -29,6 +29,15 @@ def _format_ratio_pct(value) -> str:
         return "N/D"
 
 
+def _format_money_musd(value) -> str:
+    if value is None:
+        return "N/D"
+    try:
+        return f"{float(value):.1f} M$"
+    except (TypeError, ValueError):
+        return "N/D"
+
+
 def _executer_agent_adk(system_prompt: str, user_prompt: str) -> str | None:
     print(f"\n  [IA] Initialisation de l'agent GenAI (modele: {GEMINI_MODEL})...")
 
@@ -68,28 +77,30 @@ def _build_financial_signal_prompt(
         sections_instruction += " [MODELE]"
 
     system_prompt = (
-        "Tu es un analyste buy-side specialise en signaux avances de monetisation et retention. "
-        "Tu recois un paquet de signaux structures derives d'un panel quotidien Duolingo. "
-        "Tu dois interpreter ces signaux comme un nowcast business et financier. "
-        "Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
+        "Tu es un analyste buy-side spécialisé en signaux avancés de monétisation et de rétention. "
+        "Tu reçois un paquet de signaux structurés dérivés d'un panel quotidien Duolingo. "
+        "Tu dois interpréter ces signaux comme un nowcast business et financier. "
+        "Tu ne dois pas inventer de probabilités supervisées si elles sont absentes. "
         "Tu restes prudent, tu relies comportement utilisateur et implications business, "
-        f"et tu produis uniquement les sections suivantes dans cet ordre exact: {sections_instruction}. "
-        "Style tres court, professionnel et oriente investisseur. "
-        "[RESUME]: 2 phrases maximum. "
-        "[TENDANCES]: 2 puces maximum. "
-        "[ATTENTION]: 2 puces maximum. "
-        "[CONSEILS]: 2 phrases maximum. "
-        "Utilise un francais fluide, des phrases completes et un vocabulaire naturel. "
-        "Evite de repeter les chiffres bruts inutilement. "
+        f"et tu produis uniquement les sections suivantes dans cet ordre exact : {sections_instruction}. "
+        "Style très court, professionnel et orienté investisseur. "
+        "[RESUME] : 2 phrases maximum. "
+        "[TENDANCES] : 2 puces maximum. "
+        "[ATTENTION] : 2 puces maximum. "
+        "[CONSEILS] : 2 phrases maximum. "
+        "Utilise un français fluide, avec accents corrects, phrases complètes et vocabulaire naturel. "
+        "Évite de répéter les chiffres bruts inutilement. "
     )
     if quarterly_mode:
         system_prompt += (
-            "[MODELE]: 2 phrases maximum. "
-            "Explique d'abord sur quoi repose le modèle trimestriel "
-            "(monétisation, engagement, rétention, churn, réactivations, couverture du panel), "
-            "puis explique clairement ce que représente chaque probabilité. "
-            "Quand la probabilité de revenus est mentionnée, présente-la comme une probabilité implicite "
-            "de dépasser la cible de revenus communiquée par le management, et non comme une certitude."
+            "[MODELE] : 2 phrases maximum. "
+            "Phrase 1 : explique brièvement que le modèle trimestriel agrège des signaux de monétisation, d'engagement, "
+            "de rétention, de churn, de réactivations et de couverture du panel. "
+            "Phrase 2 : explique clairement que la probabilité de beat revenus mesure la probabilité implicite de battre les revenus du trimestre, "
+            "avec une référence interne ancrée sur le guidance management lorsqu'il est disponible. Explique aussi que la probabilité de guidance raise "
+            "mesure la probabilité implicite d'un relèvement de guidance au trimestre suivant. "
+            "Fais un vrai français de note d'analyste : fluide, professionnel, naturel, avec accents corrects. "
+            "N'utilise jamais le mot 'proxy'. N'utilise pas de markdown décoratif, pas de **gras**, et pas d'anglais inutile hors beat, guidance et EBITDA."
         )
 
     user_prompt = (
@@ -128,11 +139,14 @@ def _build_financial_signal_prompt(
         f"Quarter signal bias: {quarterly_model.get('quarter_signal_bias', 'N/D')}\n"
         f"Quarter confidence: {quarterly_model.get('confidence_level', 'N/D')}\n"
         f"Quarter signal score: {quarterly_model.get('quarter_signal_score', 'N/D')}\n"
-        f"Revenue beat probability: {quarterly_model.get('revenue_beat_guidance_probability', quarterly_model.get('revenue_beat_probability_proxy', 'N/D'))}\n"
+        f"Revenue beat probability: {quarterly_model.get('revenue_beat_probability', quarterly_model.get('revenue_beat_guidance_probability', quarterly_model.get('revenue_beat_probability_proxy', 'N/D')))}\n"
         f"Revenue guidance reference: {quarterly_model.get('revenue_guidance_reference_musd', 'N/D')}\n"
         f"Revenue guidance reference quarter: {quarterly_model.get('revenue_guidance_reference_quarter', 'N/D')}\n"
+        f"Estimated revenue: {_format_money_musd(quarterly_model.get('estimated_revenue_musd'))}\n"
         f"EBITDA beat probability: {quarterly_model.get('ebitda_beat_probability', quarterly_model.get('ebitda_beat_probability_proxy', 'N/D'))}\n"
+        f"Estimated EBITDA: {_format_money_musd(quarterly_model.get('estimated_ebitda_musd'))}\n"
         f"Guidance raise probability: {quarterly_model.get('guidance_raise_probability', quarterly_model.get('guidance_raise_probability_proxy', 'N/D'))}\n"
+        f"Estimated next-quarter guidance: {_format_money_musd(quarterly_model.get('estimated_next_q_guidance_musd'))}\n"
         f"Quarter observed days: {quarterly_current.get('observed_days', 'N/D')}\n"
         f"Quarter avg coverage ratio: {_format_ratio_pct(quarterly_current.get('avg_coverage_ratio'))}\n"
         f"Quarter premium momentum 14d: {_format_ratio_pct(quarterly_current.get('avg_premium_momentum_14d'))}\n"
@@ -214,8 +228,11 @@ def generer_rapport_ia(
             quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
             quarterly_label = quarterly_model.get("quarter_signal_bias", "N/D")
             quarterly_revenue = quarterly_model.get(
-                "revenue_beat_guidance_probability",
-                quarterly_model.get("revenue_beat_probability_proxy", "N/D"),
+                "revenue_beat_probability",
+                quarterly_model.get(
+                    "revenue_beat_guidance_probability",
+                    quarterly_model.get("revenue_beat_probability_proxy", "N/D"),
+                ),
             )
             quarterly_ebitda = quarterly_model.get(
                 "ebitda_beat_probability",
@@ -229,15 +246,15 @@ def generer_rapport_ia(
                 "[RESUME]\n"
                 "Le signal quotidien et trimestriel est disponible, mais le modèle supervisé complet n'est pas encore branché.\n\n"
                 "[TENDANCES]\n"
-                f"- Signal bias: {proxy.get('signal_bias', 'neutral')}.\n"
-                f"- Nowcast trimestriel: {quarterly_label} | Beat revenus: {quarterly_revenue} | Beat EBITDA: {quarterly_ebitda}.\n\n"
+                f"- Biais du signal : {proxy.get('signal_bias', 'neutral')}.\n"
+                f"- Nowcast trimestriel : {quarterly_label} | Beat revenus : {quarterly_revenue} | Beat EBITDA : {quarterly_ebitda}.\n\n"
                 "[ATTENTION]\n"
                 "- Les probabilités restent implicites tant que l'historique guidance n'est pas complet.\n\n"
                 "[CONSEILS]\n"
                 "Utiliser ce rapport comme couche explicable avant la modélisation supervisée.\n\n"
                 "[MODELE]\n"
-                f"Le modèle trimestriel agrège des signaux de monétisation, d'engagement, de rétention, de churn, de réactivations et de couverture du panel. "
-                f"Il suggère aujourd'hui une probabilité implicite de {quarterly_revenue} de dépasser la cible de revenus du management, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relèvement de guidance."
+                "Le modèle trimestriel agrège des signaux de monétisation, d'engagement, de rétention, de churn, de réactivations et de couverture du panel. "
+                f"Il suggère aujourd'hui une probabilité implicite de {quarterly_revenue} de battre les revenus du trimestre, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relèvement de guidance."
             )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))

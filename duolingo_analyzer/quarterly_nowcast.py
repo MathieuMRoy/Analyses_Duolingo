@@ -65,12 +65,168 @@ def _quarter_from_date(value: object) -> str | None:
     return str(ts.to_period("Q"))
 
 
+def _sort_quarters(values: list[str]) -> list[str]:
+    return sorted(
+        [value for value in values if value],
+        key=lambda value: pd.Period(value, freq="Q"),
+    )
+
+
 def _previous_quarter(quarter: str) -> str | None:
     try:
         period = pd.Period(quarter, freq="Q")
     except Exception:
         return None
     return str(period - 1)
+
+
+def _format_pct_text(value: float | None, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    return f"{float(value) * 100:.{digits}f}%".replace(".", ",")
+
+
+def _format_number_text(value: float | None, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    formatted = f"{float(value):,.{digits}f}"
+    return formatted.replace(",", " ").replace(".", ",")
+
+
+def _stringify_list(value: object) -> str:
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "[]"
+    if isinstance(value, str) and value.strip().startswith("["):
+        return value
+    return json.dumps([str(value)], ensure_ascii=False)
+
+
+def _parse_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    if value is None:
+        return []
+    if isinstance(value, float) and pd.isna(value):
+        return []
+    raw = str(value).strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if str(item).strip()]
+        except Exception:
+            pass
+    return [item.strip() for item in raw.split(" | ") if item.strip()]
+
+
+def _load_saved_snapshots_df() -> pd.DataFrame:
+    if not QUARTERLY_SNAPSHOTS_FILE.exists():
+        return pd.DataFrame()
+
+    df = pd.read_csv(QUARTERLY_SNAPSHOTS_FILE)
+    if df.empty:
+        return df
+
+    for column in [
+        "snapshot_as_of_date",
+        "quarter_start",
+        "quarter_end_observed",
+        "earnings_release_date",
+    ]:
+        if column in df.columns:
+            df[column] = pd.to_datetime(df[column], errors="coerce")
+
+    if "snapshot_locked" in df.columns:
+        df["snapshot_locked"] = (
+            df["snapshot_locked"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .isin({"true", "1", "yes", "oui"})
+        )
+    else:
+        df["snapshot_locked"] = False
+
+    for column in ["main_drivers", "main_risks"]:
+        if column in df.columns:
+            df[column] = df[column].apply(_parse_list)
+
+    return df
+
+
+def _serialize_snapshots_df(df: pd.DataFrame) -> pd.DataFrame:
+    serialized = df.copy()
+    for column in ["main_drivers", "main_risks"]:
+        if column in serialized.columns:
+            serialized[column] = serialized[column].apply(_stringify_list)
+
+    for column in [
+        "snapshot_as_of_date",
+        "quarter_start",
+        "quarter_end_observed",
+        "earnings_release_date",
+    ]:
+        if column in serialized.columns:
+            serialized[column] = pd.to_datetime(serialized[column], errors="coerce").dt.strftime("%Y-%m-%d")
+
+    if "snapshot_locked" in serialized.columns:
+        serialized["snapshot_locked"] = serialized["snapshot_locked"].fillna(False).astype(bool)
+
+    return serialized
+
+
+def _snapshot_status_label(snapshot_locked: object) -> str:
+    return "Figé" if bool(snapshot_locked) else "En cours"
+
+
+def _build_snapshot_summary_text(snapshot: dict[str, object]) -> str:
+    revenue_prob = _safe_float(
+        snapshot.get("revenue_beat_probability", snapshot.get("revenue_beat_probability_proxy"))
+    )
+    guidance_prob = _safe_float(
+        snapshot.get("guidance_raise_probability", snapshot.get("guidance_raise_probability_proxy"))
+    )
+    revenue_reference = _safe_float(snapshot.get("revenue_guidance_reference_musd"))
+    drivers = snapshot.get("main_drivers") or []
+    risks = snapshot.get("main_risks") or []
+    primary_driver = str(drivers[0]).lstrip("- ").rstrip(".") if drivers else "la dynamique récente du panel"
+    primary_risk = str(risks[0]).lstrip("- ").rstrip(".") if risks else "les limites de calibration actuelles"
+    bias_label = str(snapshot.get("quarter_signal_bias") or "Neutre")
+
+    if revenue_reference:
+        revenue_reference_label = f"la guidance revenus ({_format_number_text(revenue_reference, 1)} M$)"
+    else:
+        revenue_reference_label = "la trajectoire de revenus de référence"
+
+    if bias_label == "Favorable":
+        return (
+            "Le modèle trimestriel s'appuie sur la monétisation, l'engagement, la rétention, "
+            "les réactivations et le churn observés dans le panel. "
+            f"La probabilité implicite de battre les revenus du trimestre ressort à {_format_pct_text(revenue_prob)} et reste évaluée par rapport à {revenue_reference_label}. "
+            f"La probabilité implicite de relever la guidance ressort à {_format_pct_text(guidance_prob)}, "
+            f"soutenue notamment par {primary_driver}. "
+        )
+
+    return (
+        "Le modèle trimestriel s'appuie sur la monétisation, l'engagement, la rétention, "
+        "les réactivations et le churn observés dans le panel. "
+        f"La probabilité implicite de battre les revenus du trimestre ressort à {_format_pct_text(revenue_prob)} et reste évaluée par rapport à {revenue_reference_label}. "
+        f"La probabilité implicite de relever la guidance ressort à {_format_pct_text(guidance_prob)} et demeure freinée notamment par {primary_risk}."
+    )
+
+
+def _format_estimation_note(estimate: float | None, benchmark: float | None, *, prefix: str, benchmark_label: str) -> str:
+    if estimate is None and benchmark is None:
+        return "N/D"
+    estimate_text = f"{prefix} {_format_number_text(estimate, 1)} M$" if estimate is not None else f"{prefix} N/D"
+    benchmark_text = (
+        f"{benchmark_label} {_format_number_text(benchmark, 1)} M$" if benchmark is not None else f"{benchmark_label} N/D"
+    )
+    return f"{estimate_text} vs {benchmark_text}"
 
 
 def _mean(series: pd.Series, window: int | None = None) -> float | None:
@@ -508,6 +664,10 @@ def _build_snapshot_for_quarter(
         "estimated_next_q_guidance_musd": _round_or_none(estimated_next_q_guidance, 2),
         "main_drivers": drivers[:4],
         "main_risks": risks[:4],
+        "model_summary_text": "",
+        "snapshot_as_of_date": None,
+        "snapshot_locked": False,
+        "snapshot_status_label": "En cours",
     }
 
     if label_row is not None:
@@ -562,93 +722,99 @@ def _flatten_quarterly_package(package: dict[str, object]) -> dict[str, object]:
 
 def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-
-    def _add(section: str, signal: str, value: object, definition: str) -> None:
-        rows.append(
-            {
-                "Section": section,
-                "Signal": signal,
-                "Valeur": value,
-                "Definition": definition,
-            }
-        )
-
-    metadata = package.get("metadata", {})
-    current = package.get("current_quarter", {})
-    model = package.get("model_output", {})
     readiness = package.get("labels_readiness", {})
 
-    _add("Meta", "as_of_date", metadata.get("as_of_date"), "Date de reference du nowcast trimestriel.")
-    _add("Meta", "current_quarter", metadata.get("current_quarter"), "Trimestre actuellement suivi.")
-    _add("Meta", "phase", metadata.get("phase"), "Phase du systeme de nowcasting trimestriel.")
+    for snapshot in package.get("historical_snapshots", []):
+        drivers = snapshot.get("main_drivers") or []
+        risks = snapshot.get("main_risks") or []
+        revenue_reference = _safe_float(snapshot.get("revenue_guidance_reference_musd"))
+        estimated_revenue = _safe_float(snapshot.get("estimated_revenue_musd"))
+        estimated_ebitda = _safe_float(snapshot.get("estimated_ebitda_musd"))
+        estimated_next_q_guidance = _safe_float(snapshot.get("estimated_next_q_guidance_musd"))
+        row = {
+            "quarter": snapshot.get("quarter"),
+            "snapshot_as_of_date": snapshot.get("snapshot_as_of_date"),
+            "snapshot_locked": bool(snapshot.get("snapshot_locked")),
+            "snapshot_status_label": snapshot.get("snapshot_status_label") or _snapshot_status_label(snapshot.get("snapshot_locked")),
+            "quarter_start": snapshot.get("quarter_start"),
+            "quarter_end_observed": snapshot.get("quarter_end_observed"),
+            "earnings_release_date": snapshot.get("earnings_release_date"),
+            "observed_days": snapshot.get("observed_days"),
+            "avg_coverage_ratio": snapshot.get("avg_coverage_ratio"),
+            "latest_coverage_ratio": snapshot.get("latest_coverage_ratio"),
+            "avg_active_rate": snapshot.get("avg_active_rate"),
+            "avg_super_rate": snapshot.get("avg_super_rate"),
+            "avg_max_rate": snapshot.get("avg_max_rate"),
+            "avg_xp_delta_mean": snapshot.get("avg_xp_delta_mean"),
+            "avg_monetization_momentum_index": snapshot.get("avg_monetization_momentum_index"),
+            "avg_engagement_quality_index": snapshot.get("avg_engagement_quality_index"),
+            "avg_premium_momentum_14d": snapshot.get("avg_premium_momentum_14d"),
+            "avg_max_momentum_14d": snapshot.get("avg_max_momentum_14d"),
+            "avg_churn_trend_14d": snapshot.get("avg_churn_trend_14d"),
+            "avg_reactivation_trend_7d": snapshot.get("avg_reactivation_trend_7d"),
+            "avg_high_value_retention_trend": snapshot.get("avg_high_value_retention_trend"),
+            "quarter_signal_score": snapshot.get("quarter_signal_score"),
+            "quarter_signal_bias": snapshot.get("quarter_signal_bias"),
+            "confidence_level": snapshot.get("confidence_level"),
+            "revenue_beat_probability": snapshot.get(
+                "revenue_beat_probability",
+                snapshot.get("revenue_beat_probability_proxy"),
+            ),
+            "revenue_beat_probability_proxy": snapshot.get("revenue_beat_probability_proxy"),
+            "ebitda_beat_probability_proxy": snapshot.get("ebitda_beat_probability_proxy"),
+            "guidance_raise_probability_proxy": snapshot.get("guidance_raise_probability_proxy"),
+            "revenue_guidance_reference_musd": snapshot.get("revenue_guidance_reference_musd"),
+            "revenue_guidance_reference_quarter": snapshot.get("revenue_guidance_reference_quarter"),
+            "estimated_revenue_musd": snapshot.get("estimated_revenue_musd"),
+            "estimated_ebitda_musd": snapshot.get("estimated_ebitda_musd"),
+            "estimated_next_q_guidance_musd": snapshot.get("estimated_next_q_guidance_musd"),
+            "actual_revenue_musd": snapshot.get("actual_revenue_musd"),
+            "actual_adjusted_ebitda_musd": snapshot.get("actual_adjusted_ebitda_musd"),
+            "actual_subscription_revenue_musd": snapshot.get("actual_subscription_revenue_musd"),
+            "actual_paid_subscribers_m": snapshot.get("actual_paid_subscribers_m"),
+            "guidance_next_q_revenue_musd": snapshot.get("guidance_next_q_revenue_musd"),
+            "guidance_fy_revenue_musd": snapshot.get("guidance_fy_revenue_musd"),
+            "guidance_signal": snapshot.get("guidance_signal"),
+            "main_drivers_text": "\n".join(f"- {item}" for item in drivers),
+            "main_risks_text": "\n".join(f"- {item}" for item in risks),
+            "model_summary_text": snapshot.get("model_summary_text") or _build_snapshot_summary_text(snapshot),
+            "revenue_note_text": _format_estimation_note(
+                estimated_revenue,
+                revenue_reference,
+                prefix="Est.",
+                benchmark_label="guidance",
+            ),
+            "ebitda_note_text": (
+                f"Est. {_format_number_text(estimated_ebitda, 1)} M$"
+                if estimated_ebitda is not None
+                else "Est. N/D"
+            ),
+            "next_guidance_note_text": _format_estimation_note(
+                estimated_next_q_guidance,
+                revenue_reference,
+                prefix="Guide N+1 estimé",
+                benchmark_label="base",
+            ),
+            "actual_labels_ready": readiness.get("actual_labels_ready"),
+            "guidance_benchmarks_ready": readiness.get("guidance_benchmarks_ready"),
+            "supervised_ready": readiness.get("supervised_ready"),
+            "next_step": readiness.get("next_step"),
+        }
+        rows.append(row)
 
-    for key, definition in {
-        "observed_days": "Nombre de jours de signaux observes dans le trimestre courant.",
-        "avg_coverage_ratio": "Couverture moyenne du panel sur le trimestre courant.",
-        "avg_monetization_momentum_index": "Moyenne trimestrielle recente du momentum de monetisation.",
-        "avg_engagement_quality_index": "Moyenne trimestrielle recente de la qualite d'engagement.",
-        "avg_premium_momentum_14d": "Variation recente du taux Super sur la fenetre 14 jours.",
-        "avg_churn_trend_14d": "Variation recente du taux d'abandon sur la fenetre 14 jours.",
-        "avg_reactivation_trend_7d": "Variation recente des reactivations sur la fenetre 7 jours.",
-        "avg_high_value_retention_trend": "Variation recente de la retention des cohortes a forte valeur.",
-    }.items():
-        _add("Current Quarter", key, current.get(key), definition)
+    if not rows:
+        return pd.DataFrame()
 
-    _add("Model", "quarter_signal_bias", model.get("quarter_signal_bias"), "Lecture globale du trimestre courant.")
-    _add("Model", "confidence_level", model.get("confidence_level"), "Confiance du score trimestriel en fonction de la couverture et de la profondeur.")
-    _add("Model", "quarter_signal_score", model.get("quarter_signal_score"), "Score composite explicable du trimestre.")
-    _add(
-        "Model",
-        "revenue_guidance_reference_musd",
-        model.get("revenue_guidance_reference_musd"),
-        "Guidance management revenus utilise comme benchmark quand il est disponible.",
-    )
-    _add(
-        "Model",
-        "revenue_beat_probability_proxy",
-        model.get("revenue_beat_probability_proxy"),
-        "Probabilite implicite de battre le guidance revenus management, non supervisee a ce stade.",
-    )
-    _add(
-        "Model",
-        "ebitda_beat_probability_proxy",
-        model.get("ebitda_beat_probability_proxy"),
-        "Probabilite implicite de beat EBITDA, non supervisee a ce stade.",
-    )
-    _add(
-        "Model",
-        "guidance_raise_probability_proxy",
-        model.get("guidance_raise_probability_proxy"),
-        "Probabilite implicite de relever la guidance, non supervisee a ce stade.",
-    )
-    _add("Model", "main_drivers", " | ".join(model.get("main_drivers", [])), "Drivers haussiers principaux.")
-    _add("Model", "main_risks", " | ".join(model.get("main_risks", [])), "Risques principaux.")
-
-    _add(
-        "Readiness",
-        "actual_labels_ready",
-        readiness.get("actual_labels_ready"),
-        "Nombre de trimestres avec actuals financiers renseignes.",
-    )
-    _add(
-        "Readiness",
-        "guidance_benchmarks_ready",
-        readiness.get("guidance_benchmarks_ready"),
-        "Nombre de trimestres avec guidance management revenus disponible comme benchmark.",
-    )
-    _add(
-        "Readiness",
-        "supervised_ready",
-        readiness.get("supervised_ready"),
-        "Etat de preparation du backtest supervise.",
-    )
-
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    df = df.sort_values("quarter").reset_index(drop=True)
+    return df
 
 
 def _build_historical_snapshot_df(history_df: pd.DataFrame, labels_df: pd.DataFrame) -> pd.DataFrame:
     quarter_rows: list[dict[str, object]] = []
-    all_quarters = sorted(set(history_df["quarter"].dropna().tolist()) | set(labels_df.get("quarter", pd.Series(dtype=str)).dropna().tolist()))
+    all_quarters = _sort_quarters(
+        list(set(history_df["quarter"].dropna().tolist()) | set(labels_df.get("quarter", pd.Series(dtype=str)).dropna().tolist()))
+    )
 
     labels_map = {
         str(row["quarter"]): row
@@ -667,6 +833,89 @@ def _build_historical_snapshot_df(history_df: pd.DataFrame, labels_df: pd.DataFr
         return pd.DataFrame()
 
     df = pd.DataFrame(quarter_rows)
+    df = df.sort_values("quarter").reset_index(drop=True)
+    return df
+
+
+POST_RELEASE_FIELDS = {
+    "earnings_release_date",
+    "actual_revenue_musd",
+    "consensus_revenue_musd",
+    "revenue_surprise_pct",
+    "actual_eps",
+    "consensus_eps",
+    "eps_surprise_pct",
+    "actual_adjusted_ebitda_musd",
+    "consensus_adjusted_ebitda_musd",
+    "actual_paid_subscribers_m",
+    "consensus_paid_subscribers_m",
+    "actual_subscription_revenue_musd",
+    "consensus_subscription_revenue_musd",
+    "guidance_next_q_revenue_musd",
+    "guidance_fy_revenue_musd",
+    "guidance_signal",
+    "source_actuals",
+    "source_consensus",
+    "notes",
+}
+
+
+def _merge_saved_and_live_snapshots(live_df: pd.DataFrame, reference_ts: pd.Timestamp) -> pd.DataFrame:
+    saved_df = _load_saved_snapshots_df()
+    if live_df.empty and saved_df.empty:
+        return pd.DataFrame()
+
+    live_rows = {
+        str(row["quarter"]): row.to_dict()
+        for _, row in live_df.iterrows()
+        if row.get("quarter")
+    }
+    saved_rows = {
+        str(row["quarter"]): row.to_dict()
+        for _, row in saved_df.iterrows()
+        if row.get("quarter")
+    }
+
+    merged_rows: list[dict[str, object]] = []
+    all_quarters = _sort_quarters(list(set(live_rows.keys()) | set(saved_rows.keys())))
+    reference_day = pd.Timestamp(reference_ts).normalize()
+
+    for quarter in all_quarters:
+        quarter_end = _quarter_start_end(quarter)[1]
+        quarter_closed = quarter_end is not None and reference_day > quarter_end
+        live_row = live_rows.get(quarter)
+        saved_row = saved_rows.get(quarter)
+
+        if saved_row and bool(saved_row.get("snapshot_locked")):
+            selected = dict(saved_row)
+            if live_row:
+                for field in POST_RELEASE_FIELDS:
+                    value = live_row.get(field)
+                    if value is None:
+                        continue
+                    if isinstance(value, float) and pd.isna(value):
+                        continue
+                    selected[field] = value
+        elif live_row:
+            selected = dict(live_row)
+            selected["snapshot_as_of_date"] = reference_day.strftime("%Y-%m-%d")
+            selected["snapshot_locked"] = bool(quarter_closed)
+        elif saved_row:
+            selected = dict(saved_row)
+        else:
+            continue
+
+        selected["quarter"] = quarter
+        selected["snapshot_status_label"] = _snapshot_status_label(selected.get("snapshot_locked"))
+        selected["main_drivers"] = _parse_list(selected.get("main_drivers"))
+        selected["main_risks"] = _parse_list(selected.get("main_risks"))
+        selected["model_summary_text"] = _build_snapshot_summary_text(selected)
+        merged_rows.append(selected)
+
+    if not merged_rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(merged_rows)
     df = df.sort_values("quarter").reset_index(drop=True)
     return df
 
@@ -712,6 +961,7 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
         "quarter_signal_score": current_snapshot.get("quarter_signal_score"),
         "revenue_guidance_reference_musd": current_snapshot.get("revenue_guidance_reference_musd"),
         "revenue_guidance_reference_quarter": current_snapshot.get("revenue_guidance_reference_quarter"),
+        "revenue_beat_probability": current_snapshot.get("revenue_beat_probability_proxy"),
         "revenue_beat_probability_proxy": current_snapshot.get("revenue_beat_probability_proxy"),
         "revenue_beat_guidance_probability": current_snapshot.get("revenue_beat_probability_proxy"),
         "estimated_revenue_musd": current_snapshot.get("estimated_revenue_musd"),
