@@ -1048,14 +1048,14 @@ def sauvegarder_rapport_excel(
                 ws.row_dimensions[row_idx].height = 28
                 ws.row_dimensions[row_idx + 1].height = 26
                 ws.row_dimensions[row_idx + 2].height = 22
-            ws.row_dimensions[16].height = 24
-            ws.row_dimensions[17].height = 24
-            ws.row_dimensions[18].height = 24
-            for row_idx in range(21, 26):
-                ws.row_dimensions[row_idx].height = 22
+            ws.row_dimensions[16].height = 32
+            ws.row_dimensions[17].height = 32
+            ws.row_dimensions[18].height = 20
+            for row_idx in range(20, 23):
+                ws.row_dimensions[row_idx].height = 30
             if ai_sections["CONSEILS"]:
-                for row_idx in range(28, 32):
-                    ws.row_dimensions[row_idx].height = 24
+                ws.row_dimensions[25].height = 30
+                ws.row_dimensions[26].height = 30
             for row_idx in range(hypotheses_row + 1, hypotheses_row + 5):
                 ws.row_dimensions[row_idx].height = 22
 
@@ -1311,6 +1311,21 @@ def sauvegarder_rapport_excel(
             if ws.max_row > 1:
                 ws.freeze_panes = "A2"
                 ws.auto_filter.ref = ws.dimensions
+
+        ordered_sheet_names = [
+            SUMMARY_SHEET,
+            SIGNALS_SHEET,
+            TRENDS_SHEET,
+            GLOSSAIRE_SHEET,
+            SIGNALS_RAW_SHEET,
+            CHART_DATA_SHEET,
+        ]
+        wb._sheets = sorted(
+            wb._sheets,
+            key=lambda sheet: ordered_sheet_names.index(sheet.title)
+            if sheet.title in ordered_sheet_names
+            else len(ordered_sheet_names),
+        )
 
         wb.save(RAPPORT_EXCEL_FILE)
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
