@@ -20,17 +20,7 @@ def render_quarterly_nowcast_sheet(
         ws.delete_rows(1, ws.max_row)
 
     ws.sheet_view.showGridLines = False
-    for column_letter, width in {
-        "A": 18,
-        "B": 18,
-        "C": 18,
-        "D": 18,
-        "E": 18,
-        "F": 18,
-        "G": 18,
-        "H": 18,
-    }.items():
-        ws.column_dimensions[column_letter].width = width
+    ws.freeze_panes = "A5"
 
     metadata = package.get("metadata", {})
     readiness = package.get("labels_readiness", {})
@@ -71,28 +61,37 @@ def render_quarterly_nowcast_sheet(
     navy = styles["NAVY"]
     white = styles["WHITE"]
     base_font_name = styles["BASE_FONT_NAME"]
-    white_fill = styles["white_fill"]
     center_align = styles["center_align"]
     left_align = styles["left_align"]
     thin_border = styles["thin_border"]
 
-    analyst_surface = "FBFCFE"
-    analyst_canvas = "F5F8FB"
-    analyst_slate = "EAF0F6"
-    analyst_blue_soft = "EEF5FB"
-    analyst_green_soft = "EEF7E8"
-    analyst_red_soft = "FCEBEC"
-    analyst_text = "16324F"
-    analyst_muted = "5B6777"
-    section_fill = "2A5B84"
-    hero_fill = "F3F7FB"
-    hero_note_fill = "E8F0F8"
-    hero_green = "2E7D5A"
-    hero_orange = "B8745F"
-    sidebar_fill = "F8FAFD"
-    sidebar_label_fill = "DDE7F1"
-    muted_zebra_fill = PatternFill(start_color="F7FAFD", end_color="F7FAFD", fill_type="solid")
-    model_label_fill = PatternFill(start_color=analyst_slate, end_color=analyst_slate, fill_type="solid")
+    canvas = "F4F7FA"
+    paper = "FFFFFF"
+    slate = "E6EDF4"
+    blue_section = "2A5B84"
+    ink = "16324F"
+    muted = "5E6A79"
+    soft_blue = "EEF5FB"
+    soft_green = "EEF7E8"
+    soft_red = "FCEBEC"
+    soft_amber = "FBF3E3"
+    soft_slate = "F3F6F9"
+    green = "2E7D5A"
+    red = "C65A46"
+    orange = "C98A3D"
+    light_label = "DCE7F1"
+
+    for column_letter, width in {
+        "A": 17,
+        "B": 17,
+        "C": 17,
+        "D": 17,
+        "E": 17,
+        "F": 17,
+        "G": 15,
+        "H": 15,
+    }.items():
+        ws.column_dimensions[column_letter].width = width
 
     def _formula_text_literal(value: str) -> str:
         return '"' + str(value).replace('"', '""') + '"'
@@ -115,8 +114,8 @@ def render_quarterly_nowcast_sheet(
         range_ref: str,
         value: str,
         *,
-        fill: str = white,
-        font_color: str = "000000",
+        fill: str = paper,
+        font_color: str = ink,
         size: int = 11,
         bold: bool = False,
         align=None,
@@ -135,75 +134,95 @@ def render_quarterly_nowcast_sheet(
         if number_format:
             cell.number_format = number_format
 
-    def write_card(
-        start_col: str,
-        end_col: str,
-        title_row: int,
+    def write_metric_card(
+        title_range: str,
+        value_range: str,
+        note_range: str,
         title: str,
-        value: str,
-        note: str,
+        value_formula: str,
+        note_formula: str,
         accent: str,
         *,
-        value_color: str = "000000",
-        value_number_format: str | None = None,
-        value_fill: str = white,
-        note_fill: str = analyst_slate,
+        note_fill: str,
+        value_fill: str = paper,
+        value_color: str = ink,
+        value_size: int = 18,
+        value_format: str | None = None,
     ) -> None:
+        write_box(title_range, title, fill=accent, font_color=white, size=10, bold=True)
         write_box(
-            f"{start_col}{title_row}:{end_col}{title_row}",
-            title,
-            fill=accent,
-            font_color=white,
-            size=10,
-            bold=True,
-        )
-        write_box(
-            f"{start_col}{title_row + 1}:{end_col}{title_row + 2}",
-            value,
+            value_range,
+            value_formula,
             fill=value_fill,
             font_color=value_color,
-            size=16,
+            size=value_size,
             bold=True,
-            number_format=value_number_format,
+            number_format=value_format,
         )
         write_box(
-            f"{start_col}{title_row + 3}:{end_col}{title_row + 3}",
-            note,
+            note_range,
+            note_formula,
             fill=note_fill,
-            font_color=analyst_muted,
+            font_color=muted,
             size=9,
             align=Alignment(horizontal="center", vertical="center", wrap_text=True),
         )
 
     summary_formula = (
-        f'="Date snapshot : "&{_raw_lookup_expr("snapshot_as_of_date")}'
-        f'&" | Trimestre affiché : "&$C$4'
-        f'&" | Statut : "&{_raw_lookup_expr("snapshot_status_label")}'
-        f'&" | Jours observés : "&{_raw_lookup_expr("observed_days")}'
-        f'&" | Couverture moyenne : "&IFERROR(TEXT({_raw_lookup_expr("avg_coverage_ratio", fallback="0")}, "0.0%"), "N/D")'
-        f'&" | Lecture trimestrielle : "&{_raw_lookup_expr("quarter_signal_bias")}'
+        '="Date snapshot : "&'
+        + _raw_lookup_expr("snapshot_as_of_date")
+        + '&" | Trimestre affiché : "&$C$4'
+        + '&" | Statut : "&'
+        + _raw_lookup_expr("snapshot_status_label")
+        + '&" | Jours observés : "&'
+        + _raw_lookup_expr("observed_days", fallback='"0"')
+        + '&" | Couverture moyenne : "&IFERROR(TEXT('
+        + _raw_lookup_expr("avg_coverage_ratio", fallback="0")
+        + ', "0.0%"), "N/D")'
+    )
+
+    guidance_reference_formula = (
+        '=IFERROR(IF('
+        + _raw_lookup_expr("revenue_guidance_reference_musd", fallback="0")
+        + '>0, "Guidance de référence : "&TEXT('
+        + _raw_lookup_expr("revenue_guidance_reference_musd", fallback="0")
+        + ', "0.0")&" M$"&IF('
+        + _raw_lookup_expr("revenue_guidance_reference_quarter", fallback='""')
+        + '<>""," ("&'
+        + _raw_lookup_expr("revenue_guidance_reference_quarter", fallback='""')
+        + '&")",""), "Guidance de référence : N/D"), "Guidance de référence : N/D")'
+    )
+
+    cadence_formula = (
+        '="Score : "&IFERROR(TEXT('
+        + _raw_lookup_expr("quarter_signal_score", fallback="0")
+        + ', "0.0")&"/100","N/D")'
+        + '&" | Taux actifs : "&IFERROR(TEXT('
+        + _raw_lookup_expr("avg_active_rate", fallback="0")
+        + ', "0.0%"),"N/D")'
     )
 
     write_box("A1:H2", "NOWCAST TRIMESTRIEL", fill=navy, font_color=white, size=18, bold=True)
     write_box(
         "A3:H3",
         summary_formula,
-        fill=analyst_slate,
-        font_color="333333",
+        fill=canvas,
+        font_color=muted,
         size=10,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("A4:B4", "Trimestre affiché", fill=navy, font_color=white, size=10, bold=True)
-    write_box("C4", default_quarter, fill=analyst_surface, font_color=analyst_text, size=11, bold=True)
+    write_box("A4:B4", "Trimestre affiché", fill=blue_section, font_color=white, size=10, bold=True)
+    write_box("C4", default_quarter, fill=paper, font_color=ink, size=11, bold=True)
     write_box(
         "D4:H4",
-        "Choisissez un trimestre pour consulter son snapshot figé et ses estimations.",
-        fill=analyst_canvas,
-        font_color=analyst_muted,
+        "Sélectionnez un trimestre pour relire son snapshot figé et ses estimations.",
+        fill=canvas,
+        font_color=muted,
         size=9,
         align=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
+
     if available_quarters:
         validation = DataValidation(
             type="list",
@@ -215,123 +234,173 @@ def render_quarterly_nowcast_sheet(
         ws.add_data_validation(validation)
         validation.add(ws["C4"])
 
-    write_box("A5:E5", "Point de lecture trimestriel", fill=navy, font_color=white, size=11, bold=True)
-    write_box("F5:H5", "Contexte du trimestre", fill=hero_green, font_color=white, size=11, bold=True)
+    write_box("A6:F6", "Estimation revenus trimestrielle", fill=navy, font_color=white, size=11, bold=True)
+    write_box("G6:H6", "Lecture du trimestre", fill=green, font_color=white, size=11, bold=True)
 
     write_box(
-        "A6:E8",
+        "A7:F10",
         '=IFERROR(TEXT(' + _raw_lookup_expr("estimated_revenue_musd", fallback="0") + ', "0.0")&" M$","N/D")',
-        fill=hero_fill,
-        font_color=analyst_text,
-        size=24,
+        fill=paper,
+        font_color=ink,
+        size=28,
         bold=True,
     )
     write_box(
-        "A9:E9",
+        "A11:F11",
         _raw_lookup_formula("revenue_note_text"),
-        fill=hero_note_fill,
-        font_color=analyst_muted,
+        fill=soft_blue,
+        font_color=muted,
         size=10,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("F6:H6", "Lecture trimestrielle", fill=sidebar_label_fill, font_color=analyst_text, size=10, bold=True)
-    write_box("F7:H7", _raw_lookup_formula("quarter_signal_bias"), fill=sidebar_fill, font_color=analyst_text, size=16, bold=True)
-    write_box("F8:H8", '="Confiance : "&' + _raw_lookup_expr("confidence_level"), fill=sidebar_fill, font_color=analyst_text, size=10)
     write_box(
-        "F9:H9",
-        '="Taux actifs : "&IFERROR(TEXT(' + _raw_lookup_expr("avg_active_rate", fallback="0") + ', "0.0%"),"N/D")'
-        + '&" | Score : "&IFERROR(TEXT(' + _raw_lookup_expr("quarter_signal_score", fallback="0") + ', "0.0")&"/100","N/D")',
-        fill=sidebar_fill,
-        font_color=analyst_muted,
+        "G7:H8",
+        _raw_lookup_formula("quarter_signal_bias"),
+        fill=soft_slate,
+        font_color=ink,
+        size=18,
+        bold=True,
+    )
+    write_box(
+        "G9:H9",
+        '="Confiance : "&' + _raw_lookup_expr("confidence_level"),
+        fill=soft_slate,
+        font_color=ink,
         size=10,
+        bold=True,
+    )
+    write_box(
+        "G10:H10",
+        guidance_reference_formula,
+        fill=soft_slate,
+        font_color=muted,
+        size=9,
+        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+    )
+    write_box(
+        "G11:H11",
+        cadence_formula,
+        fill=soft_slate,
+        font_color=muted,
+        size=9,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_card(
-        "A",
-        "B",
-        11,
+    write_box("A13:H13", "Probabilités implicites", fill=blue_section, font_color=white, size=11, bold=True)
+    write_metric_card(
+        "A14:B14",
+        "A15:B16",
+        "A17:B17",
         "Prob. beat revenus",
         _raw_lookup_formula("revenue_beat_probability", fallback="0"),
-        "Probabilité implicite sur les revenus du trimestre",
-        section_fill,
-        value_number_format="0.0%",
-        value_fill=analyst_surface,
-        note_fill=analyst_blue_soft,
+        _raw_lookup_formula("revenue_note_text"),
+        blue_section,
+        note_fill=soft_blue,
+        value_format="0.0%",
     )
-    write_card(
-        "C",
-        "D",
-        11,
-        "Prob. guidance raise",
-        _raw_lookup_formula("guidance_raise_probability", fallback="0"),
-        _raw_lookup_formula("next_guidance_note_text"),
-        hero_green,
-        value_number_format="0.0%",
-        value_fill=analyst_surface,
-        note_fill=analyst_green_soft,
-    )
-    write_card(
-        "E",
-        "F",
-        11,
+    write_metric_card(
+        "C14:D14",
+        "C15:D16",
+        "C17:D17",
         "Prob. beat EBITDA",
         _raw_lookup_formula("ebitda_beat_probability", fallback="0"),
         _raw_lookup_formula("ebitda_note_text"),
-        hero_orange,
-        value_number_format="0.0%",
-        value_fill=analyst_surface,
-        note_fill="FBF4E4",
+        orange,
+        note_fill=soft_amber,
+        value_format="0.0%",
     )
-    write_card(
-        "G",
-        "H",
-        11,
+    write_metric_card(
+        "E14:F14",
+        "E15:F16",
+        "E17:F17",
+        "Prob. guidance raise",
+        _raw_lookup_formula("guidance_raise_probability", fallback="0"),
+        _raw_lookup_formula("next_guidance_note_text"),
+        green,
+        note_fill=soft_green,
+        value_format="0.0%",
+    )
+    write_metric_card(
+        "G14:H14",
+        "G15:H16",
+        "G17:H17",
         "Couverture moyenne",
         _raw_lookup_formula("avg_coverage_ratio", fallback="0"),
-        "Moyenne du panel observé sur le trimestre",
-        section_fill,
-        value_number_format="0.0%",
-        value_fill=analyst_surface,
-        note_fill=analyst_blue_soft,
+        "Profondeur moyenne du panel observé",
+        blue_section,
+        note_fill=soft_blue,
+        value_format="0.0%",
     )
 
-    write_box("A16:H16", "Lecture du modèle", fill=navy, font_color=white, size=11, bold=True)
+    write_box("A19:F19", "Lecture du modèle", fill=navy, font_color=white, size=11, bold=True)
     write_box(
-        "A17:H19",
+        "A20:F23",
         _raw_lookup_formula("model_summary_text"),
-        fill=analyst_surface,
-        font_color=analyst_text,
+        fill=paper,
+        font_color=ink,
         size=11,
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
-
-    write_box("A21:D21", "Moteurs principaux", fill=hero_green, font_color=white, size=11, bold=True)
-    write_box("E21:H21", "Risques principaux", fill="B85C5C", font_color=white, size=11, bold=True)
+    write_box("G19:H19", "Cadence du trimestre", fill=blue_section, font_color=white, size=10, bold=True)
     write_box(
-        "A22:D25",
+        "G20:H20",
+        '="Jours observés : "&' + _raw_lookup_expr("observed_days", fallback='"0"'),
+        fill=light_label,
+        font_color=muted,
+        size=9,
+        bold=True,
+    )
+    write_box(
+        "G21:H21",
+        '="Score : "&IFERROR(TEXT(' + _raw_lookup_expr("quarter_signal_score", fallback="0") + ', "0.0")&"/100","N/D")',
+        fill=paper,
+        font_color=ink,
+        size=14,
+        bold=True,
+    )
+    write_box(
+        "G22:H22",
+        '="Taux utilisateurs actifs : "&IFERROR(TEXT(' + _raw_lookup_expr("avg_active_rate", fallback="0") + ', "0.0%"),"N/D")',
+        fill=light_label,
+        font_color=muted,
+        size=9,
+        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+    )
+    write_box(
+        "G23:H23",
+        '="Snapshot : "&' + _raw_lookup_expr("snapshot_status_label"),
+        fill=light_label,
+        font_color=muted,
+        size=9,
+        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+    )
+
+    write_box("A25:D25", "Moteurs principaux", fill=green, font_color=white, size=11, bold=True)
+    write_box("E25:H25", "Risques principaux", fill=red, font_color=white, size=11, bold=True)
+    write_box(
+        "A26:D29",
         _raw_lookup_formula("main_drivers_text"),
-        fill=analyst_green_soft,
-        font_color=analyst_text,
+        fill=soft_green,
+        font_color=ink,
         size=10,
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
     write_box(
-        "E22:H25",
+        "E26:H29",
         _raw_lookup_formula("main_risks_text"),
-        fill=analyst_red_soft,
-        font_color=analyst_text,
+        fill=soft_red,
+        font_color=ink,
         size=10,
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
-    next_step = readiness.get("next_step") or "Completer les labels trimestriels avant calibration supervisee."
+    next_step = readiness.get("next_step") or "Compléter les labels trimestriels avant calibration supervisée."
     model_rows = [
-        ("Snapshot selectionne", _raw_lookup_formula("snapshot_status_label")),
+        ("Snapshot sélectionné", _raw_lookup_formula("snapshot_status_label")),
         ("Date du snapshot", _raw_lookup_formula("snapshot_as_of_date")),
         (
-            "Reference guidance revenus",
+            "Référence guidance revenus",
             '=IFERROR(IF('
             + _raw_lookup_expr("revenue_guidance_reference_musd", fallback="0")
             + '>0, TEXT('
@@ -342,36 +411,40 @@ def render_quarterly_nowcast_sheet(
             + _raw_lookup_expr("revenue_guidance_reference_quarter", fallback='""')
             + '&")",""), "N/D"), "N/D")',
         ),
-        ("Modele supervise pret", "Oui" if readiness.get("supervised_ready") else "Non"),
-        ("Etape suivante", next_step),
+        ("Modèle supervisé prêt", "Oui" if readiness.get("supervised_ready") else "Non"),
+        ("Étape suivante", next_step),
     ]
 
-    write_box("A27:H27", "Cadre du modele", fill=navy, font_color=white, size=11, bold=True)
-    row_cursor = 28
+    write_box("A31:H31", "Cadre du modèle", fill=navy, font_color=white, size=11, bold=True)
+    row_cursor = 32
     for label, value in model_rows:
-        row_fill = muted_zebra_fill if row_cursor % 2 == 0 else white_fill
+        row_fill = soft_slate if row_cursor % 2 == 0 else paper
         ws[f"A{row_cursor}"] = label
-        ws[f"A{row_cursor}"].fill = model_label_fill
-        ws[f"A{row_cursor}"].font = Font(name=base_font_name, size=10, bold=True, color=analyst_text)
+        ws[f"A{row_cursor}"].fill = PatternFill(start_color=slate, end_color=slate, fill_type="solid")
+        ws[f"A{row_cursor}"].font = Font(name=base_font_name, size=10, bold=True, color=ink)
         ws[f"A{row_cursor}"].alignment = left_align
         ws[f"A{row_cursor}"].border = thin_border
         ws.merge_cells(f"B{row_cursor}:H{row_cursor}")
         value_cell = ws[f"B{row_cursor}"]
         value_cell.value = value
-        value_cell.fill = row_fill
-        value_cell.font = Font(name=base_font_name, size=10, color=analyst_text)
+        value_cell.fill = PatternFill(start_color=row_fill, end_color=row_fill, fill_type="solid")
+        value_cell.font = Font(name=base_font_name, size=10, color=ink)
         value_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
         value_cell.border = thin_border
         for merged_col in range(3, 9):
             ws.cell(row=row_cursor, column=merged_col).border = thin_border
-            ws.cell(row=row_cursor, column=merged_col).fill = row_fill
+            ws.cell(row=row_cursor, column=merged_col).fill = PatternFill(
+                start_color=row_fill,
+                end_color=row_fill,
+                fill_type="solid",
+            )
         row_cursor += 1
 
     history_header_row = row_cursor + 1
     write_box(
         f"A{history_header_row}:H{history_header_row}",
-        "Historique trimestriel fige",
-        fill=navy,
+        "Historique trimestriel figé",
+        fill=blue_section,
         font_color=white,
         size=11,
         bold=True,
@@ -390,14 +463,14 @@ def render_quarterly_nowcast_sheet(
     for col_idx, header in enumerate(history_headers, start=1):
         cell = ws.cell(row=history_table_row, column=col_idx)
         cell.value = header
-        cell.fill = PatternFill(start_color=section_fill, end_color=section_fill, fill_type="solid")
+        cell.fill = PatternFill(start_color=navy, end_color=navy, fill_type="solid")
         cell.font = Font(name=base_font_name, color=white, bold=True, size=10)
         cell.alignment = center_align
         cell.border = thin_border
 
     row_cursor = history_table_row + 1
     for idx, snapshot in enumerate(reversed(historical), start=0):
-        row_fill = muted_zebra_fill if idx % 2 == 0 else white_fill
+        row_fill = soft_slate if idx % 2 == 0 else paper
         values = [
             snapshot.get("quarter"),
             snapshot.get("snapshot_status_label"),
@@ -411,9 +484,9 @@ def render_quarterly_nowcast_sheet(
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=row_cursor, column=col_idx)
             cell.value = value
-            cell.fill = row_fill
+            cell.fill = PatternFill(start_color=row_fill, end_color=row_fill, fill_type="solid")
             cell.border = thin_border
-            cell.font = Font(name=base_font_name, size=10, color=analyst_text)
+            cell.font = Font(name=base_font_name, size=10, color=ink)
             cell.alignment = center_align
             if col_idx == 4 and isinstance(value, numbers.Number):
                 cell.number_format = "0.0"
@@ -424,45 +497,44 @@ def render_quarterly_nowcast_sheet(
         row_cursor += 1
 
     assumptions_row = row_cursor + 1
-    write_box(f"A{assumptions_row}:H{assumptions_row}", "Hypotheses", fill=navy, font_color=white, size=11, bold=True)
-    assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothese specifique."
+    write_box(
+        f"A{assumptions_row}:H{assumptions_row}",
+        "Hypothèses",
+        fill=blue_section,
+        font_color=white,
+        size=11,
+        bold=True,
+    )
+    assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothèse spécifique."
     write_box(
         f"A{assumptions_row + 1}:H{assumptions_row + 4}",
         assumptions_text,
-        fill=analyst_slate,
-        font_color=analyst_muted,
+        fill=soft_slate,
+        font_color=muted,
         size=10,
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
-    ws.column_dimensions["A"].width = 18
-    ws.column_dimensions["B"].width = 18
-    ws.column_dimensions["C"].width = 18
-    ws.column_dimensions["D"].width = 18
-    ws.column_dimensions["E"].width = 18
-    ws.column_dimensions["F"].width = 15
-    ws.column_dimensions["G"].width = 15
-    ws.column_dimensions["H"].width = 15
-
     ws.row_dimensions[3].height = 24
     ws.row_dimensions[4].height = 24
-    ws.row_dimensions[5].height = 24
-    ws.row_dimensions[6].height = 30
-    ws.row_dimensions[7].height = 38
-    ws.row_dimensions[8].height = 30
-    ws.row_dimensions[9].height = 24
-    for row_idx in [12]:
+    ws.row_dimensions[6].height = 24
+    ws.row_dimensions[7].height = 34
+    ws.row_dimensions[8].height = 34
+    ws.row_dimensions[9].height = 22
+    ws.row_dimensions[10].height = 22
+    ws.row_dimensions[11].height = 24
+    ws.row_dimensions[13].height = 24
+    ws.row_dimensions[14].height = 22
+    ws.row_dimensions[15].height = 26
+    ws.row_dimensions[16].height = 26
+    ws.row_dimensions[17].height = 24
+    ws.row_dimensions[19].height = 24
+    for row_idx in range(20, 24):
         ws.row_dimensions[row_idx].height = 28
-        ws.row_dimensions[row_idx + 1].height = 28
-        ws.row_dimensions[row_idx + 2].height = 24
-    ws.row_dimensions[16].height = 24
-    ws.row_dimensions[17].height = 30
-    ws.row_dimensions[18].height = 30
-    ws.row_dimensions[19].height = 30
-    ws.row_dimensions[21].height = 24
-    for row_idx in range(22, 26):
+    ws.row_dimensions[25].height = 24
+    for row_idx in range(26, 30):
         ws.row_dimensions[row_idx].height = 28
-    for row_idx in range(28, history_header_row):
+    for row_idx in range(32, history_header_row):
         ws.row_dimensions[row_idx].height = 22
     ws.row_dimensions[history_header_row].height = 24
     ws.row_dimensions[history_table_row].height = 22

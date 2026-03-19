@@ -126,6 +126,8 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
         target_column = SUMMARY_COLUMN_ALIASES.get(str(source_column).strip())
         if not target_column:
             continue
+        if target_column not in normalized.columns:
+            continue
 
         source_series = df[source_column]
 
