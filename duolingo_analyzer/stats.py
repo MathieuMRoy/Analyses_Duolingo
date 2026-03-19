@@ -35,7 +35,6 @@ QUARTERLY_RAW_SHEET = "Nowcast Trimestriel - Raw"
 
 PERCENT_COLUMNS = {
     "Taux Abonn. Super",
-    "Taux Abonn. Max",
     "Taux d'Abandon Global",
     "Score d'Engagement",
 }
@@ -54,7 +53,6 @@ SUMMARY_COLUMNS = [
     "Évol. vs Veille",
     "Apprentissage (XP/j)",
     "Taux Abonn. Super",
-    "Taux Abonn. Max",
     "Taux d'Abandon Global",
     "Reactivations vs Veille",
     "Score d'Engagement",
@@ -276,7 +274,6 @@ def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
                 "Évol. vs Veille": delta_streak,
                 "Apprentissage (XP/j)": round(delta_xp_moyen, 0),
                 "Taux Abonn. Super": round(taux_super / 100, 6) if isinstance(taux_super, numbers.Number) else None,
-                "Taux Abonn. Max": round(taux_max / 100, 6) if isinstance(taux_max, numbers.Number) else None,
                 "Taux d'Abandon Global": round(taux_churn / 100, 6),
                 "Reactivations vs Veille": reactivations_veille,
                 "Score d'Engagement": round(score_engagement / 100, 6),
@@ -825,9 +822,7 @@ def calculer_statistiques() -> dict | None:
 
     print(f"     • Utilisateurs Actifs : {stats['utilisateurs_actifs']}")
     taux_super = stats.get("taux_conversion_plus")
-    taux_max = stats.get("taux_conversion_max")
     print(f"     • Pénétration Super Duolingo : {f'{taux_super:.1f}%' if isinstance(taux_super, numbers.Number) else 'N/D'}")
-    print(f"     • Pénétration Duolingo Max    : {f'{taux_max:.1f}%' if isinstance(taux_max, numbers.Number) else 'N/D'}")
     print(f"     • Ruptures de Série (abandons) : {stats['streaks_tombes_zero']}")
     print(f"     • Taux d'Abandon Global : {stats.get('taux_churn', 0):.1f}%")
     print(f"     • Reactivations vs veille : {stats.get('reactivations_veille', 0)}")
@@ -896,8 +891,6 @@ def sauvegarder_rapport_excel(
             "Apprentissage (XP/j)": round(stats.get("delta_xp_moyen", 0), 0),
             "Taux Abonn. Super": round(stats["taux_conversion_plus"] / 100, 6)
                 if isinstance(stats.get("taux_conversion_plus"), numbers.Number) else None,
-            "Taux Abonn. Max": round(stats["taux_conversion_max"] / 100, 6)
-                if isinstance(stats.get("taux_conversion_max"), numbers.Number) else None,
             "Taux d'Abandon Global": round(stats.get("taux_churn", 0) / 100, 6),
             "Reactivations vs Veille": stats.get("reactivations_veille", 0),
             "Score d'Engagement": round(stats.get("score_sante_jour", 0) / 100, 6),
@@ -940,7 +933,6 @@ def sauvegarder_rapport_excel(
                 {"KPI": "Moyenne Streak (J)", "Définition": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité à long terme."},
                 {"KPI": "Apprentissage (XP/j)", "Définition": "Gain moyen de points d'expérience (XP) depuis hier. Mesure l'effort d'apprentissage quotidien."},
                 {"KPI": "Taux Abonn. Super", "Définition": "Part observable du panel premium via hasPlus. Tant que Max n'est pas détecté de façon fiable, ce taux peut encore inclure une partie des comptes Max."},
-                {"KPI": "Taux Abonn. Max", "Définition": "Part du panel explicitement identifiée comme Duolingo Max. Affiche N/D si la détection Max n'est pas assez fiable."},
                 {"KPI": "Taux d'Abandon Global", "Définition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombe à 0)."},
                 {"KPI": "Reactivations vs Veille", "Définition": "Nombre d'utilisateurs inactifs hier (streak à 0) redevenus actifs aujourd'hui."},
                 {"KPI": "Progression Débutants vers Standard", "Définition": "Part des Débutants actifs hier qui sont encore actifs aujourd'hui et ont progressé vers la cohorte Standard."},
@@ -1320,7 +1312,6 @@ def sauvegarder_rapport_excel(
                 ("Reactivation trend 7j", _pretty_delta_pts(proxy.get("reactivation_trend_7d"))),
                 ("High-value retention", _pretty_delta_pts(proxy.get("high_value_retention_trend"))),
                 ("Super rate", _pretty_ratio_pct(business.get("super_rate"), 1)),
-                ("Max rate", _pretty_ratio_pct(business.get("max_rate"), 1)),
                 ("Progression Débutants -> Standard", _pretty_ratio_pct(business.get("debutants_to_standard_rate"), 1)),
                 ("Abandon Débutants", _pretty_ratio_pct(business.get("debutants_abandon_rate"), 1)),
                 ("Abandon Standard", _pretty_ratio_pct(business.get("standard_abandon_rate"), 1)),
