@@ -69,16 +69,6 @@ SUMMARY_COLUMN_ALIASES = {
     "Taux d'Abandon Global": "Taux d'Abandon Global",
     "Taux d'Attrition Global": "Taux d'Abandon Global",
     "Reactivations vs Veille": "Reactivations vs Veille",
-    "Progression Débutants vers Standard": "Progression Débutants vers Standard",
-    "Transitions Débutants vers Standard": "Progression Débutants vers Standard",
-    "Churn Débutants": "Abandon Débutants",
-    "Abandon Débutants": "Abandon Débutants",
-    "Churn Standard": "Abandon Standard",
-    "Churn Standard ": "Abandon Standard",
-    "Abandon Standard": "Abandon Standard",
-    "Abandon Standard ": "Abandon Standard",
-    "Churn Super-Actifs": "Abandon Super-Actifs",
-    "Abandon Super-Actifs": "Abandon Super-Actifs",
     "Score Santé Global": "Score d'Engagement",
     "Score d'Engagement": "Score d'Engagement",
     "Total Profils": "Panel Total",
@@ -141,6 +131,11 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if "Date" in normalized.columns:
         normalized = normalized[normalized["Date"].notna()]
+    if "Panel Total" in normalized.columns:
+        panel_total_numeric = pd.to_numeric(normalized["Panel Total"], errors="coerce")
+        normalized = normalized[panel_total_numeric.fillna(0) > 0]
+        normalized["Panel Total"] = panel_total_numeric.loc[normalized.index]
+    if "Date" in normalized.columns:
         normalized = normalized.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
 
     return normalized.reset_index(drop=True)
@@ -194,12 +189,104 @@ def _load_daily_log_df() -> pd.DataFrame:
     return df
 
 
+def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
+    if df is None or df.empty:
+        return None
+
+    df = df.copy()
+    df = df[~df["Username"].str.contains("Aggregated", na=False)]
+    df = df[df["Cohort"] != "Global"]
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df[df["Date"].notna()]
+    if df.empty:
+        return None
+
+    df = df.sort_values(["Date", "Username"]).drop_duplicates(subset=["Date", "Username"], keep="last")
+    available_dates = sorted(df["Date"].dt.strftime("%Y-%m-%d").unique().tolist())
+    if not available_dates:
+        return None
+
+    rows: list[dict[str, object]] = []
+    for date_str in available_dates:
+        date_obj = pd.to_datetime(date_str, errors="coerce")
+        prev_date_str = (date_obj - timedelta(days=1)).strftime("%Y-%m-%d") if pd.notna(date_obj) else None
+
+        df_jour = df[df["Date"].dt.strftime("%Y-%m-%d") == date_str].copy()
+        df_hier = df[df["Date"].dt.strftime("%Y-%m-%d") == prev_date_str].copy() if prev_date_str else pd.DataFrame()
+
+        moyenne_streak_jour = float(df_jour["Streak"].mean()) if not df_jour.empty else 0.0
+        moyenne_streak_hier = float(df_hier["Streak"].mean()) if not df_hier.empty else None
+        delta_streak = round(moyenne_streak_jour - moyenne_streak_hier, 1) if moyenne_streak_hier is not None else None
+
+        taux_super = None
+        taux_max = None
+        if not df_jour.empty:
+            if "HasMax" in df_jour.columns:
+                taux_max = (len(df_jour[df_jour["HasMax"] == True]) / len(df_jour)) * 100 if len(df_jour) else None
+            if "HasPlus" in df_jour.columns:
+                if "HasMax" in df_jour.columns:
+                    super_count = len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)])
+                else:
+                    super_count = len(df_jour[df_jour["HasPlus"] == True])
+                taux_super = (super_count / len(df_jour)) * 100 if len(df_jour) else None
+
+        delta_xp_moyen = 0.0
+        taux_churn = 0.0
+        reactivations_veille = 0
+        if not df_jour.empty and not df_hier.empty:
+            merged = df_hier.merge(
+                df_jour,
+                on="Username",
+                suffixes=("_hier", "_jour"),
+                how="inner",
+            )
+            if "TotalXP_hier" in merged.columns and "TotalXP_jour" in merged.columns and not merged.empty:
+                merged["Delta_XP"] = merged["TotalXP_jour"] - merged["TotalXP_hier"]
+                merged.loc[merged["Delta_XP"] < 0, "Delta_XP"] = 0
+                delta_xp_moyen = float(merged["Delta_XP"].mean()) if not merged.empty else 0.0
+
+            tombes_a_zero = merged[(merged["Streak_hier"] > 0) & (merged["Streak_jour"] == 0)]
+            actifs_hier = int(len(df_hier[df_hier["Streak"] > 0]))
+            taux_churn = ((len(tombes_a_zero) / actifs_hier) * 100) if actifs_hier > 0 else 0.0
+            reactivations_veille = int(((merged["Streak_hier"] == 0) & (merged["Streak_jour"] > 0)).sum())
+
+        utilisateurs_actifs = int(len(df_jour[df_jour["Streak"] > 0]))
+        score_engagement = ((utilisateurs_actifs / len(df_jour)) * 100) if len(df_jour) > 0 else 0.0
+
+        rows.append(
+            {
+                "Date": date_obj,
+                "Série Moyenne (Jours)": round(moyenne_streak_jour, 1),
+                "Évol. vs Veille": delta_streak,
+                "Apprentissage (XP/j)": round(delta_xp_moyen, 0),
+                "Taux Abonn. Super": round(taux_super / 100, 6) if isinstance(taux_super, numbers.Number) else None,
+                "Taux Abonn. Max": round(taux_max / 100, 6) if isinstance(taux_max, numbers.Number) else None,
+                "Taux d'Abandon Global": round(taux_churn / 100, 6),
+                "Reactivations vs Veille": reactivations_veille,
+                "Score d'Engagement": round(score_engagement / 100, 6),
+                "Panel Total": int(len(df_jour)),
+            }
+        )
+
+    return pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
+
+
 def _charger_resume_historique() -> pd.DataFrame | None:
+    frames: list[pd.DataFrame] = []
+
+    try:
+        df_log = _load_daily_log_df()
+        df_from_log = _build_summary_history_from_log(df_log)
+        if df_from_log is not None and not df_from_log.empty:
+            frames.append(df_from_log)
+    except Exception:
+        pass
+
     if RAPPORT_EXCEL_FILE.exists():
         try:
             df_resume = pd.read_excel(RAPPORT_EXCEL_FILE, sheet_name=SUMMARY_SHEET)
             if df_resume is not None and not df_resume.empty:
-                return _normalize_summary_df(df_resume)
+                frames.append(df_resume)
         except Exception:
             pass
 
@@ -208,7 +295,6 @@ def _charger_resume_historique() -> pd.DataFrame | None:
     except Exception:
         daily_reports = []
 
-    frames: list[pd.DataFrame] = []
     for report_path in daily_reports:
         if report_path == RAPPORT_EXCEL_FILE:
             continue
@@ -1191,9 +1277,6 @@ def sauvegarder_rapport_excel(
 
             write_box(f"A{model_header_row}:H{model_header_row}", "Etat du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
             model_rows = [
-                ("Revenue Beat Probability", "N/D (Phase 2)"),
-                ("EBITDA Beat Probability", "N/D (Phase 2)"),
-                ("Guidance Raise Probability", "N/D (Phase 2)"),
                 ("Reactivation trend 7j", _pretty_delta_pts(proxy.get("reactivation_trend_7d"))),
                 ("High-value retention", _pretty_delta_pts(proxy.get("high_value_retention_trend"))),
                 ("Super rate", _pretty_ratio_pct(business.get("super_rate"), 1)),
