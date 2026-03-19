@@ -136,7 +136,13 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
         normalized = normalized[panel_total_numeric.fillna(0) > 0]
         normalized["Panel Total"] = panel_total_numeric.loc[normalized.index]
     if "Date" in normalized.columns:
-        normalized = normalized.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+        normalized["_panel_total_rank"] = pd.to_numeric(normalized.get("Panel Total"), errors="coerce").fillna(-1)
+        normalized["_completeness_rank"] = normalized.notna().sum(axis=1)
+        normalized = (
+            normalized.sort_values(["Date", "_panel_total_rank", "_completeness_rank"])
+            .drop_duplicates(subset=["Date"], keep="last")
+            .drop(columns=["_panel_total_rank", "_completeness_rank"], errors="ignore")
+        )
 
     return normalized.reset_index(drop=True)
 
@@ -271,6 +277,43 @@ def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
     return pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
 
 
+def _load_summary_sheet(report_path: Path) -> pd.DataFrame | None:
+    try:
+        workbook = pd.ExcelFile(report_path)
+    except Exception:
+        return None
+
+    for sheet_name in [SUMMARY_SHEET, *BAD_SHEET_NAMES]:
+        if sheet_name not in workbook.sheet_names:
+            continue
+        try:
+            df_summary = pd.read_excel(report_path, sheet_name=sheet_name)
+            if df_summary is not None and not df_summary.empty:
+                return df_summary
+        except Exception:
+            continue
+
+    for sheet_name in workbook.sheet_names:
+        try:
+            df_preview = pd.read_excel(report_path, sheet_name=sheet_name, nrows=5)
+        except Exception:
+            continue
+
+        normalized_headers = {
+            SUMMARY_COLUMN_ALIASES.get(str(column).strip())
+            for column in df_preview.columns
+        }
+        if {"Date", "Panel Total"}.issubset(normalized_headers):
+            try:
+                df_summary = pd.read_excel(report_path, sheet_name=sheet_name)
+                if df_summary is not None and not df_summary.empty:
+                    return df_summary
+            except Exception:
+                continue
+
+    return None
+
+
 def _charger_resume_historique() -> pd.DataFrame | None:
     frames: list[pd.DataFrame] = []
 
@@ -284,7 +327,7 @@ def _charger_resume_historique() -> pd.DataFrame | None:
 
     if RAPPORT_EXCEL_FILE.exists():
         try:
-            df_resume = pd.read_excel(RAPPORT_EXCEL_FILE, sheet_name=SUMMARY_SHEET)
+            df_resume = _load_summary_sheet(RAPPORT_EXCEL_FILE)
             if df_resume is not None and not df_resume.empty:
                 frames.append(df_resume)
         except Exception:
@@ -299,7 +342,7 @@ def _charger_resume_historique() -> pd.DataFrame | None:
         if report_path == RAPPORT_EXCEL_FILE:
             continue
         try:
-            df_tmp = pd.read_excel(report_path, sheet_name=SUMMARY_SHEET)
+            df_tmp = _load_summary_sheet(report_path)
             if df_tmp is not None and not df_tmp.empty:
                 frames.append(df_tmp)
         except Exception:
