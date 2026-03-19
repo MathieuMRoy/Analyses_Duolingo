@@ -1610,8 +1610,8 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
-            write_box("A20:D20", "Moteurs principaux", fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
-            write_box("E20:H20", "Risques principaux", fill="FF6B6B", font_color=WHITE, size=11, bold=True)
+            write_box("A20:D20", "Moteurs principaux", fill="4D7C0F", font_color=WHITE, size=11, bold=True)
+            write_box("E20:H20", "Risques principaux", fill="B85C5C", font_color=WHITE, size=11, bold=True)
             write_box(
                 "A21:D24",
                 _compact_bullet_text("\n".join(f"- {item}" for item in drivers), max_items=3, max_chars=150),
@@ -1647,17 +1647,17 @@ def sauvegarder_rapport_excel(
             ]
             row_cursor = 27
             for label, value in model_rows:
-                row_fill = zebra_fill if row_cursor % 2 == 1 else white_fill
+                row_fill = muted_zebra_fill if row_cursor % 2 == 0 else white_fill
                 ws[f"A{row_cursor}"] = label
-                ws[f"A{row_cursor}"].fill = row_fill
-                ws[f"A{row_cursor}"].font = Font(name=BASE_FONT_NAME, size=10, bold=True)
+                ws[f"A{row_cursor}"].fill = model_label_fill
+                ws[f"A{row_cursor}"].font = Font(name=BASE_FONT_NAME, size=10, bold=True, color=ANALYST_TEXT)
                 ws[f"A{row_cursor}"].alignment = left_align
                 ws[f"A{row_cursor}"].border = thin_border
                 ws.merge_cells(f"B{row_cursor}:H{row_cursor}")
                 value_cell = ws[f"B{row_cursor}"]
                 value_cell.value = value
                 value_cell.fill = row_fill
-                value_cell.font = Font(name=BASE_FONT_NAME, size=10)
+                value_cell.font = Font(name=BASE_FONT_NAME, size=10, color=ANALYST_TEXT)
                 value_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 value_cell.border = thin_border
                 for merged_col in range(3, 9):
@@ -1720,8 +1720,8 @@ def sauvegarder_rapport_excel(
             write_box(
                 f"A{assumptions_row + 1}:H{assumptions_row + 4}",
                 assumptions_text,
-                fill=LIGHT_GREY,
-                font_color="333333",
+                fill=ANALYST_SLATE,
+                font_color=ANALYST_MUTED,
                 size=10,
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
@@ -1846,6 +1846,8 @@ def sauvegarder_rapport_excel(
                 accent: str,
                 value_color: str = "000000",
                 value_number_format: str | None = None,
+                value_fill: str = WHITE,
+                note_fill: str = LIGHT_GREY,
             ) -> None:
                 write_box(
                     f"{start_col}{title_row}:{end_col}{title_row}",
@@ -1858,7 +1860,7 @@ def sauvegarder_rapport_excel(
                 write_box(
                     f"{start_col}{title_row + 1}:{end_col}{title_row + 2}",
                     value,
-                    fill=WHITE,
+                    fill=value_fill,
                     font_color=value_color,
                     size=16,
                     bold=True,
@@ -1867,11 +1869,32 @@ def sauvegarder_rapport_excel(
                 write_box(
                     f"{start_col}{title_row + 3}:{end_col}{title_row + 3}",
                     note,
-                    fill=LIGHT_GREY,
+                    fill=note_fill,
                     font_color="555555",
                     size=9,
                     align=Alignment(horizontal="center", vertical="center", wrap_text=True),
                 )
+
+            ANALYST_SURFACE = "FBFCFE"
+            ANALYST_CANVAS = "F5F8FB"
+            ANALYST_SLATE = "EAF0F6"
+            ANALYST_BLUE_SOFT = "EEF5FB"
+            ANALYST_GREEN_SOFT = "EEF7E8"
+            ANALYST_RED_SOFT = "FCEBEC"
+            ANALYST_AMBER_SOFT = "FBF4E4"
+            ANALYST_TEXT = "16324F"
+            ANALYST_MUTED = "5B6777"
+            SECTION_FILL = "2A5B84"
+            muted_zebra_fill = PatternFill(start_color="F7FAFD", end_color="F7FAFD", fill_type="solid")
+            model_label_fill = PatternFill(start_color=ANALYST_SLATE, end_color=ANALYST_SLATE, fill_type="solid")
+
+            def paint_spacer(row_idx: int, *, height: int = 9) -> None:
+                ws.row_dimensions[row_idx].height = height
+                spacer_fill = PatternFill(start_color=ANALYST_CANVAS, end_color=ANALYST_CANVAS, fill_type="solid")
+                for col_idx in range(1, 9):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    cell.fill = spacer_fill
+                    cell.border = Border()
 
             summary_formula = (
                 f'="Date snapshot : "&{_raw_lookup_expr("snapshot_as_of_date")}'
@@ -1886,18 +1909,18 @@ def sauvegarder_rapport_excel(
             write_box(
                 "A3:H3",
                 summary_formula,
-                fill=LIGHT_GREY,
+                fill=ANALYST_SLATE,
                 font_color="333333",
                 size=10,
                 align=Alignment(horizontal="center", vertical="center", wrap_text=True),
             )
             write_box("A4:B4", "Trimestre affiché", fill=NAVY, font_color=WHITE, size=10, bold=True)
-            write_box("C4", default_quarter, fill=WHITE, font_color="000000", size=11, bold=True)
+            write_box("C4", default_quarter, fill=ANALYST_SURFACE, font_color=ANALYST_TEXT, size=11, bold=True)
             write_box(
                 "D4:H4",
                 "Choisissez un trimestre pour consulter son snapshot figé et ses estimations.",
-                fill=LIGHT_GREY,
-                font_color="555555",
+                fill=ANALYST_CANVAS,
+                font_color=ANALYST_MUTED,
                 size=9,
                 align=Alignment(horizontal="left", vertical="center", wrap_text=True),
             )
@@ -1920,6 +1943,8 @@ def sauvegarder_rapport_excel(
                 "=$C$4",
                 f'="Statut : "&{_raw_lookup_expr("snapshot_status_label")}&" | Snapshot : "&{_raw_lookup_expr("snapshot_as_of_date")}',
                 NAVY,
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_SLATE,
             )
             write_card(
                 "C",
@@ -1928,8 +1953,10 @@ def sauvegarder_rapport_excel(
                 "Taux d'utilisateurs actifs",
                 _raw_lookup_formula("avg_active_rate", fallback="0"),
                 "Part moyenne du panel demeurée active",
-                DUO_GREEN,
+                "3C6E47",
                 value_number_format="0.0%",
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_GREEN_SOFT,
             )
             write_card(
                 "E",
@@ -1938,8 +1965,10 @@ def sauvegarder_rapport_excel(
                 "Prob. beat revenus",
                 _raw_lookup_formula("revenue_beat_probability", fallback="0"),
                 _raw_lookup_formula("revenue_note_text"),
-                DUO_BLUE,
+                SECTION_FILL,
                 value_number_format="0.0%",
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_BLUE_SOFT,
             )
             write_card(
                 "G",
@@ -1950,6 +1979,8 @@ def sauvegarder_rapport_excel(
                 _raw_lookup_formula("ebitda_note_text"),
                 NAVY,
                 value_number_format="0.0%",
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_SLATE,
             )
             write_card(
                 "A",
@@ -1958,8 +1989,10 @@ def sauvegarder_rapport_excel(
                 "Prob. guidance raise",
                 _raw_lookup_formula("guidance_raise_probability", fallback="0"),
                 _raw_lookup_formula("next_guidance_note_text"),
-                DUO_GREEN,
+                "4D7C0F",
                 value_number_format="0.0%",
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_GREEN_SOFT,
             )
             write_card(
                 "C",
@@ -1968,7 +2001,9 @@ def sauvegarder_rapport_excel(
                 "Confiance",
                 _raw_lookup_formula("confidence_level"),
                 "Couverture + profondeur historique",
-                "FF8A65",
+                "B8745F",
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_AMBER_SOFT,
             )
             write_card(
                 "E",
@@ -1977,7 +2012,9 @@ def sauvegarder_rapport_excel(
                 "Score trimestre",
                 f'=IFERROR(TEXT({_raw_lookup_expr("quarter_signal_score", fallback="0")}, "0.0")&" / 100","N/D")',
                 "Score synthétique du trimestre",
-                NAVY,
+                SECTION_FILL,
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_SLATE,
             )
             write_card(
                 "G",
@@ -1986,35 +2023,37 @@ def sauvegarder_rapport_excel(
                 "Couverture moyenne",
                 _raw_lookup_formula("avg_coverage_ratio", fallback="0"),
                 "Moyenne du panel sur le trimestre",
-                DUO_BLUE,
+                SECTION_FILL,
                 value_number_format="0.0%",
+                value_fill=ANALYST_SURFACE,
+                note_fill=ANALYST_BLUE_SOFT,
             )
 
             write_box("A15:H15", "Lecture du modèle", fill=NAVY, font_color=WHITE, size=11, bold=True)
             write_box(
                 "A16:H18",
                 _raw_lookup_formula("model_summary_text"),
-                fill=WHITE,
-                font_color="000000",
+                fill=ANALYST_SURFACE,
+                font_color=ANALYST_TEXT,
                 size=11,
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
-            write_box("A20:D20", "Moteurs principaux", fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
-            write_box("E20:H20", "Risques principaux", fill="FF6B6B", font_color=WHITE, size=11, bold=True)
+            write_box("A20:D20", "Moteurs principaux", fill="4D7C0F", font_color=WHITE, size=11, bold=True)
+            write_box("E20:H20", "Risques principaux", fill="B85C5C", font_color=WHITE, size=11, bold=True)
             write_box(
                 "A21:D24",
                 _raw_lookup_formula("main_drivers_text"),
-                fill=WHITE,
-                font_color="000000",
+                fill=ANALYST_GREEN_SOFT,
+                font_color=ANALYST_TEXT,
                 size=10,
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
             write_box(
                 "E21:H24",
                 _raw_lookup_formula("main_risks_text"),
-                fill=WHITE,
-                font_color="000000",
+                fill=ANALYST_RED_SOFT,
+                font_color=ANALYST_TEXT,
                 size=10,
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
@@ -2042,17 +2081,17 @@ def sauvegarder_rapport_excel(
             write_box("A26:H26", "État du modèle", fill=NAVY, font_color=WHITE, size=11, bold=True)
             row_cursor = 27
             for label, value in model_rows:
-                row_fill = zebra_fill if row_cursor % 2 == 1 else white_fill
+                row_fill = muted_zebra_fill if row_cursor % 2 == 0 else white_fill
                 ws[f"A{row_cursor}"] = label
-                ws[f"A{row_cursor}"].fill = row_fill
-                ws[f"A{row_cursor}"].font = Font(name=BASE_FONT_NAME, size=10, bold=True)
+                ws[f"A{row_cursor}"].fill = model_label_fill
+                ws[f"A{row_cursor}"].font = Font(name=BASE_FONT_NAME, size=10, bold=True, color=ANALYST_TEXT)
                 ws[f"A{row_cursor}"].alignment = left_align
                 ws[f"A{row_cursor}"].border = thin_border
                 ws.merge_cells(f"B{row_cursor}:H{row_cursor}")
                 value_cell = ws[f"B{row_cursor}"]
                 value_cell.value = value
                 value_cell.fill = row_fill
-                value_cell.font = Font(name=BASE_FONT_NAME, size=10)
+                value_cell.font = Font(name=BASE_FONT_NAME, size=10, color=ANALYST_TEXT)
                 value_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 value_cell.border = thin_border
                 for merged_col in range(3, 9):
@@ -2064,26 +2103,26 @@ def sauvegarder_rapport_excel(
             write_box(f"A{history_header_row}:H{history_header_row}", "Historique trimestriel figé", fill=NAVY, font_color=WHITE, size=11, bold=True)
             history_table_row = history_header_row + 1
             history_headers = [
-                "Quarter",
+                "Trimestre",
                 "Statut",
-                "Snapshot",
+                "Date snapshot",
                 "Score",
                 "Beat rev.",
                 "Beat EBITDA",
                 "Guidance raise",
-                "Jours",
+                "Jours obs.",
             ]
             for col_idx, header in enumerate(history_headers, start=1):
                 cell = ws.cell(row=history_table_row, column=col_idx)
                 cell.value = header
-                cell.fill = header_fill
-                cell.font = header_font
+                cell.fill = PatternFill(start_color=SECTION_FILL, end_color=SECTION_FILL, fill_type="solid")
+                cell.font = Font(name=BASE_FONT_NAME, color=WHITE, bold=True, size=10)
                 cell.alignment = center_align
                 cell.border = thin_border
 
             row_cursor = history_table_row + 1
             for idx, snapshot in enumerate(reversed(historical), start=0):
-                row_fill = zebra_fill if idx % 2 == 0 else white_fill
+                row_fill = muted_zebra_fill if idx % 2 == 0 else white_fill
                 values = [
                     snapshot.get("quarter"),
                     snapshot.get("snapshot_status_label"),
@@ -2099,7 +2138,7 @@ def sauvegarder_rapport_excel(
                     cell.value = value
                     cell.fill = row_fill
                     cell.border = thin_border
-                    cell.font = base_font
+                    cell.font = Font(name=BASE_FONT_NAME, size=10, color=ANALYST_TEXT)
                     cell.alignment = center_align
                     if col_idx == 4 and isinstance(value, numbers.Number):
                         cell.number_format = "0.0"
@@ -2115,25 +2154,44 @@ def sauvegarder_rapport_excel(
             write_box(
                 f"A{assumptions_row + 1}:H{assumptions_row + 4}",
                 assumptions_text,
-                fill=LIGHT_GREY,
-                font_color="333333",
+                fill=ANALYST_SLATE,
+                font_color=ANALYST_MUTED,
                 size=10,
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
+            ws.column_dimensions["A"].width = 16
+            ws.column_dimensions["B"].width = 16
+            ws.column_dimensions["C"].width = 16
+            ws.column_dimensions["D"].width = 15
+            ws.column_dimensions["E"].width = 15
+            ws.column_dimensions["F"].width = 15
+            ws.column_dimensions["G"].width = 15
+            ws.column_dimensions["H"].width = 15
+
             for row_idx in [6, 11]:
                 ws.row_dimensions[row_idx].height = 28
-                ws.row_dimensions[row_idx + 1].height = 26
-                ws.row_dimensions[row_idx + 2].height = 22
+                ws.row_dimensions[row_idx + 1].height = 28
+                ws.row_dimensions[row_idx + 2].height = 24
             ws.row_dimensions[16].height = 42
             ws.row_dimensions[17].height = 30
             ws.row_dimensions[18].height = 30
+            ws.row_dimensions[3].height = 24
+            ws.row_dimensions[4].height = 24
+            ws.row_dimensions[15].height = 24
+            ws.row_dimensions[20].height = 24
             for row_idx in range(21, 25):
                 ws.row_dimensions[row_idx].height = 28
+            for row_idx in range(27, history_header_row):
+                ws.row_dimensions[row_idx].height = 22
+            ws.row_dimensions[history_header_row].height = 24
+            ws.row_dimensions[history_table_row].height = 22
+            for row_idx in range(history_table_row + 1, row_cursor):
+                ws.row_dimensions[row_idx].height = 21
             for row_idx in range(assumptions_row + 1, assumptions_row + 5):
                 ws.row_dimensions[row_idx].height = 22
 
-        def render_quarterly_nowcast_sheet(ws, package: dict) -> None:
+        def render_quarterly_nowcast_sheet_v2(ws, package: dict) -> None:
             from openpyxl.utils import get_column_letter
             from openpyxl.worksheet.datavalidation import DataValidation
 
