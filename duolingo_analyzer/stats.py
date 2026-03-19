@@ -2308,11 +2308,11 @@ def sauvegarder_rapport_excel(
                 size=10,
                 align=Alignment(horizontal="center", vertical="center", wrap_text=True),
             )
-            write_box("A4:B4", "Trimestre affiche", fill=NAVY, font_color=WHITE, size=10, bold=True)
+            write_box("A4:B4", "Trimestre", fill=NAVY, font_color=WHITE, size=10, bold=True)
             write_box("C4", default_quarter, fill=WHITE, font_color="000000", size=11, bold=True)
             write_box(
                 "D4:H4",
-                "Consultez un trimestre fige pour relire l'estimation, son benchmark guidance et le contexte du modele.",
+                "Selectionnez un trimestre pour relire son snapshot fige, son benchmark guidance et son contexte de lecture.",
                 fill=LIGHT_GREY,
                 font_color="555555",
                 size=9,
@@ -2329,9 +2329,9 @@ def sauvegarder_rapport_excel(
                 ws.add_data_validation(validation)
                 validation.add(ws["C4"])
 
-            write_box("A6:E6", "ESTIMATION REVENUS TRIMESTRIELLE", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
+            write_box("A6:F6", "POINT DE LECTURE TRIMESTRIEL", fill=DUO_BLUE, font_color=WHITE, size=11, bold=True)
             write_box(
-                "A7:E8",
+                "A7:C9",
                 f'=IFERROR(TEXT({_raw_lookup_expr("estimated_revenue_musd", fallback="0")}, "0.0")&" M$","N/D")',
                 fill=WHITE,
                 font_color="16324F",
@@ -2339,25 +2339,38 @@ def sauvegarder_rapport_excel(
                 bold=True,
             )
             write_box(
-                "A9:E10",
+                "A10:C11",
                 _raw_lookup_formula("revenue_note_text"),
                 fill="F7FAFD",
                 font_color="4A5568",
                 size=10,
                 align=Alignment(horizontal="center", vertical="center", wrap_text=True),
             )
-
-            write_box("F6:H6", "LECTURE DU TRIMESTRE", fill=bias_fill, font_color=WHITE, size=11, bold=True)
+            write_box("D7:F7", "Lecture", fill="EAF3FB", font_color=NAVY, size=10, bold=True)
             write_box(
-                "F7:H8",
+                "D8:F9",
                 bias_label,
                 fill=WHITE,
                 font_color="16324F",
-                size=20,
+                size=18,
                 bold=True,
             )
             write_box(
-                "F9:H10",
+                "D10:F11",
+                '=IFERROR("Snapshot : "&'
+                + _raw_lookup_expr("snapshot_status_label")
+                + '&" | Date : "&'
+                + _raw_lookup_expr("snapshot_as_of_date")
+                + ',"N/D")',
+                fill="F7FAFD",
+                font_color="4A5568",
+                size=10,
+                align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+            )
+
+            write_box("G6:H6", "QUALITE DU SIGNAL", fill="FF8A65", font_color=WHITE, size=11, bold=True)
+            write_box(
+                "G7:H11",
                 quality_note_formula,
                 fill="F7FAFD",
                 font_color="4A5568",
@@ -2367,8 +2380,8 @@ def sauvegarder_rapport_excel(
 
             write_card(
                 "A",
-                "B",
-                12,
+                "C",
+                13,
                 "Prob. beat revenus",
                 _raw_lookup_formula("revenue_beat_probability", fallback="0"),
                 "Probabilite implicite sur le trimestre",
@@ -2376,9 +2389,9 @@ def sauvegarder_rapport_excel(
                 value_number_format="0.0%",
             )
             write_card(
-                "C",
                 "D",
-                12,
+                "F",
+                13,
                 "Prob. beat EBITDA",
                 _raw_lookup_formula("ebitda_beat_probability", fallback="0"),
                 "Monetisation, engagement et retention",
@@ -2386,29 +2399,19 @@ def sauvegarder_rapport_excel(
                 value_number_format="0.0%",
             )
             write_card(
-                "E",
-                "F",
-                12,
+                "G",
+                "H",
+                13,
                 "Prob. guidance raise",
                 _raw_lookup_formula("guidance_raise_probability", fallback="0"),
                 "Probabilite implicite de relevement",
                 DUO_GREEN,
                 value_number_format="0.0%",
             )
-            write_card(
-                "G",
-                "H",
-                12,
-                "Taux utilisateurs actifs",
-                _raw_lookup_formula("avg_active_rate", fallback="0"),
-                "Part moyenne du panel demeuree active",
-                "FF8A65",
-                value_number_format="0.0%",
-            )
 
-            write_box("A17:H17", "Lecture du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            write_box("A18:H18", "Lecture du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
             write_box(
-                "A18:H20",
+                "A19:H21",
                 _raw_lookup_formula("model_summary_text"),
                 fill=WHITE,
                 font_color="000000",
@@ -2416,10 +2419,10 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
-            write_box("A22:D22", "Moteurs principaux", fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
-            write_box("E22:H22", "Risques principaux", fill="FF6B6B", font_color=WHITE, size=11, bold=True)
+            write_box("A23:D23", "Moteurs principaux", fill=DUO_GREEN, font_color=WHITE, size=11, bold=True)
+            write_box("E23:H23", "Risques principaux", fill="FF6B6B", font_color=WHITE, size=11, bold=True)
             write_box(
-                "A23:D26",
+                "A24:D27",
                 _raw_lookup_formula("main_drivers_text"),
                 fill=WHITE,
                 font_color="000000",
@@ -2427,7 +2430,7 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
             write_box(
-                "E23:H26",
+                "E24:H27",
                 _raw_lookup_formula("main_risks_text"),
                 fill=WHITE,
                 font_color="000000",
@@ -2435,8 +2438,8 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
-            write_box("A28:H28", "Cadre du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
-            row_cursor = 29
+            write_box("A29:H29", "Cadre du modele", fill=NAVY, font_color=WHITE, size=11, bold=True)
+            row_cursor = 30
             for label, value in model_rows:
                 row_fill = zebra_fill if row_cursor % 2 == 1 else white_fill
                 ws[f"A{row_cursor}"] = label
@@ -2517,11 +2520,11 @@ def sauvegarder_rapport_excel(
                 align=Alignment(horizontal="left", vertical="top", wrap_text=True),
             )
 
-            ws.column_dimensions["A"].width = 16
-            ws.column_dimensions["B"].width = 16
-            ws.column_dimensions["C"].width = 17
-            ws.column_dimensions["D"].width = 17
-            ws.column_dimensions["E"].width = 17
+            ws.column_dimensions["A"].width = 15
+            ws.column_dimensions["B"].width = 15
+            ws.column_dimensions["C"].width = 15
+            ws.column_dimensions["D"].width = 14
+            ws.column_dimensions["E"].width = 14
             ws.column_dimensions["F"].width = 14
             ws.column_dimensions["G"].width = 14
             ws.column_dimensions["H"].width = 14
@@ -2529,17 +2532,18 @@ def sauvegarder_rapport_excel(
             ws.row_dimensions[1].height = 30
             ws.row_dimensions[2].height = 24
             ws.row_dimensions[4].height = 24
-            ws.row_dimensions[7].height = 34
-            ws.row_dimensions[8].height = 34
-            ws.row_dimensions[9].height = 24
-            ws.row_dimensions[10].height = 24
-            ws.row_dimensions[13].height = 28
+            ws.row_dimensions[7].height = 40
+            ws.row_dimensions[8].height = 38
+            ws.row_dimensions[9].height = 38
+            ws.row_dimensions[10].height = 26
+            ws.row_dimensions[11].height = 30
             ws.row_dimensions[14].height = 28
-            ws.row_dimensions[15].height = 24
-            ws.row_dimensions[18].height = 34
-            ws.row_dimensions[19].height = 30
-            ws.row_dimensions[20].height = 30
-            for row_idx in range(23, 27):
+            ws.row_dimensions[15].height = 28
+            ws.row_dimensions[18].height = 24
+            ws.row_dimensions[19].height = 36
+            ws.row_dimensions[20].height = 36
+            ws.row_dimensions[21].height = 34
+            for row_idx in range(24, 28):
                 ws.row_dimensions[row_idx].height = 28
             for row_idx in range(assumptions_row + 1, assumptions_row + 5):
                 ws.row_dimensions[row_idx].height = 22
