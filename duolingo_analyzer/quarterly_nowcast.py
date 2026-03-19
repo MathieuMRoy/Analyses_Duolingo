@@ -761,7 +761,15 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
                 snapshot.get("revenue_beat_probability_proxy"),
             ),
             "revenue_beat_probability_proxy": snapshot.get("revenue_beat_probability_proxy"),
+            "ebitda_beat_probability": snapshot.get(
+                "ebitda_beat_probability",
+                snapshot.get("ebitda_beat_probability_proxy"),
+            ),
             "ebitda_beat_probability_proxy": snapshot.get("ebitda_beat_probability_proxy"),
+            "guidance_raise_probability": snapshot.get(
+                "guidance_raise_probability",
+                snapshot.get("guidance_raise_probability_proxy"),
+            ),
             "guidance_raise_probability_proxy": snapshot.get("guidance_raise_probability_proxy"),
             "revenue_guidance_reference_musd": snapshot.get("revenue_guidance_reference_musd"),
             "revenue_guidance_reference_quarter": snapshot.get("revenue_guidance_reference_quarter"),
@@ -898,7 +906,10 @@ def _merge_saved_and_live_snapshots(live_df: pd.DataFrame, reference_ts: pd.Time
                     selected[field] = value
         elif live_row:
             selected = dict(live_row)
-            selected["snapshot_as_of_date"] = reference_day.strftime("%Y-%m-%d")
+            snapshot_as_of_date = selected.get("quarter_end_observed") or selected.get("snapshot_as_of_date")
+            if snapshot_as_of_date is None:
+                snapshot_as_of_date = reference_day.strftime("%Y-%m-%d")
+            selected["snapshot_as_of_date"] = snapshot_as_of_date
             selected["snapshot_locked"] = bool(quarter_closed)
         elif saved_row:
             selected = dict(saved_row)
@@ -980,6 +991,8 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
             "phase": "phase_2_quarterly_nowcast_v1",
             "as_of_date": pd.Timestamp(reference_ts).strftime("%Y-%m-%d"),
             "current_quarter": current_quarter,
+            "default_selected_quarter": current_quarter,
+            "available_quarters": historical_snapshot_df["quarter"].dropna().astype(str).tolist(),
             "history_days_available": int(len(eligible_history)),
             "history_quarters_available": int(historical_snapshot_df["quarter"].nunique()),
             "source": "financial_signals_history.csv + quarterly_labels_template.csv",
