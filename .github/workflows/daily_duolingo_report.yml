@@ -80,6 +80,8 @@ jobs:
 
       - name: Rebuild historical workbook
         if: steps.gate.outputs.run_now == 'true'
+        env:
+          PYTHONPATH: .
         run: python scripts_utilitaires/build_historique.py
 
       - name: Push updated files to Google Drive
@@ -94,6 +96,7 @@ jobs:
           path: |
             rapports_donnees/rapport_historique.xlsx
             daily_streaks_log.csv
+
 
 
 
