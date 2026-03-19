@@ -17,6 +17,14 @@ from statistics import mean
 import pandas as pd
 
 from .config import DAILY_LOG_FILE, REPORT_DIR, TARGET_USERS_FILE, now_toronto
+from .subscription_detection import (
+    apply_max_overrides,
+    compute_max_count,
+    compute_super_observable_count,
+    has_reliable_max_detection,
+    parse_bool,
+    parse_optional_bool,
+)
 
 LOG_COLUMNS = ["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus", "HasMax"]
 LEGACY_LOG_COLUMNS = ["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus"]
@@ -24,13 +32,6 @@ COHORTS = ["Debutants", "Standard", "Super-Actifs"]
 
 FINANCIAL_SIGNALS_JSON_FILE = REPORT_DIR / "financial_signals_latest.json"
 FINANCIAL_SIGNALS_HISTORY_FILE = REPORT_DIR / "financial_signals_history.csv"
-
-
-def _parse_bool(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    raw = str(value or "").strip().lower()
-    return raw in {"true", "1", "yes", "y", "vrai"}
 
 
 def _safe_ratio(numerator: float, denominator: float) -> float | None:
@@ -91,8 +92,8 @@ def _window_delta(series: pd.Series, window: int) -> float | None:
     return _safe_mean(recent) - _safe_mean(previous)
 
 
-def _subscription_state(has_plus: bool, has_max: bool) -> str:
-    if has_max:
+def _subscription_state(has_plus: bool, has_max: bool | None) -> str:
+    if has_max is True:
         return "max"
     if has_plus:
         return "super"
@@ -137,7 +138,7 @@ def _load_daily_log_df() -> pd.DataFrame:
 
             normalized = row[:]
             if len(normalized) == 6:
-                normalized.append("False")
+                normalized.append("")
             elif len(normalized) > 7:
                 normalized = normalized[:7]
             elif len(normalized) < 6:
@@ -156,8 +157,9 @@ def _load_daily_log_df() -> pd.DataFrame:
     df["Username"] = df["Username"].astype(str)
     df["Streak"] = pd.to_numeric(df["Streak"], errors="coerce").fillna(0)
     df["TotalXP"] = pd.to_numeric(df["TotalXP"], errors="coerce").fillna(0)
-    df["HasPlus"] = df["HasPlus"].apply(_parse_bool)
-    df["HasMax"] = df["HasMax"].apply(_parse_bool)
+    df["HasPlus"] = df["HasPlus"].apply(parse_bool)
+    df["HasMax"] = df["HasMax"].apply(parse_optional_bool)
+    df = apply_max_overrides(df)
 
     df = df[df["Date"].notna()]
     df = df[~df["Username"].str.contains("Aggregated", na=False)]
@@ -183,7 +185,7 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
             continue
 
         current_df["SubscriptionState"] = current_df.apply(
-            lambda row: _subscription_state(bool(row["HasPlus"]), bool(row["HasMax"])),
+            lambda row: _subscription_state(bool(row["HasPlus"]), row["HasMax"]),
             axis=1,
         )
 
@@ -191,9 +193,10 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
         active_users = int((current_df["Streak"] > 0).sum())
         active_rate = _safe_ratio(active_users, panel_total)
         avg_streak = float(current_df["Streak"].mean()) if panel_total else None
-        super_users = int((current_df["SubscriptionState"] == "super").sum())
-        max_users = int((current_df["SubscriptionState"] == "max").sum())
-        paid_users = int((current_df["SubscriptionState"] != "free").sum())
+        current_max_reliable = has_reliable_max_detection(current_df["HasMax"])
+        super_users = compute_super_observable_count(current_df["HasPlus"], current_df["HasMax"])
+        max_users = compute_max_count(current_df["HasMax"])
+        paid_users = int(current_df["HasPlus"].astype(bool).sum())
 
         high_value_df = current_df[current_df["Cohort"] == "Super-Actifs"]
         high_value_active_rate = _safe_ratio(
@@ -210,7 +213,7 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
             "active_rate": active_rate,
             "avg_streak": avg_streak,
             "super_rate": _safe_ratio(super_users, panel_total),
-            "max_rate": _safe_ratio(max_users, panel_total),
+            "max_rate": _safe_ratio(max_users, panel_total) if max_users is not None else None,
             "paid_rate": _safe_ratio(paid_users, panel_total),
             "high_value_active_rate": high_value_active_rate,
             "xp_delta_mean": None,
@@ -241,6 +244,8 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
                         "Cohort",
                         "Streak",
                         "TotalXP",
+                        "HasPlus",
+                        "HasMax",
                         "SubscriptionState",
                     ]
                 ],
@@ -255,31 +260,45 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
                 inactive_prev_mask = merged["Streak_prev"] == 0
                 churn_mask = active_prev_mask & (merged["Streak_curr"] == 0)
                 reactivation_mask = inactive_prev_mask & (merged["Streak_curr"] > 0)
+                paid_prev_mask = merged["HasPlus_prev"].astype(bool)
+                paid_curr_mask = merged["HasPlus_curr"].astype(bool)
 
-                free_to_super = (
-                    (merged["SubscriptionState_prev"] == "free")
-                    & (merged["SubscriptionState_curr"] == "super")
-                ).sum()
-                free_to_max = (
-                    (merged["SubscriptionState_prev"] == "free")
-                    & (merged["SubscriptionState_curr"] == "max")
-                ).sum()
-                super_to_free = (
-                    (merged["SubscriptionState_prev"] == "super")
-                    & (merged["SubscriptionState_curr"] == "free")
-                ).sum()
-                max_to_free = (
-                    (merged["SubscriptionState_prev"] == "max")
-                    & (merged["SubscriptionState_curr"] == "free")
-                ).sum()
-                super_to_max = (
-                    (merged["SubscriptionState_prev"] == "super")
-                    & (merged["SubscriptionState_curr"] == "max")
-                ).sum()
-                max_to_super = (
-                    (merged["SubscriptionState_prev"] == "max")
-                    & (merged["SubscriptionState_curr"] == "super")
-                ).sum()
+                free_to_super = int((~paid_prev_mask & paid_curr_mask).sum())
+                super_to_free = int((paid_prev_mask & ~paid_curr_mask).sum())
+
+                previous_max_reliable = has_reliable_max_detection(previous_df["HasMax"])
+                max_transitions_reliable = current_max_reliable and previous_max_reliable
+
+                if max_transitions_reliable:
+                    free_to_max = int(
+                        (
+                            (merged["SubscriptionState_prev"] == "free")
+                            & (merged["SubscriptionState_curr"] == "max")
+                        ).sum()
+                    )
+                    max_to_free = int(
+                        (
+                            (merged["SubscriptionState_prev"] == "max")
+                            & (merged["SubscriptionState_curr"] == "free")
+                        ).sum()
+                    )
+                    super_to_max = int(
+                        (
+                            (merged["SubscriptionState_prev"] == "super")
+                            & (merged["SubscriptionState_curr"] == "max")
+                        ).sum()
+                    )
+                    max_to_super = int(
+                        (
+                            (merged["SubscriptionState_prev"] == "max")
+                            & (merged["SubscriptionState_curr"] == "super")
+                        ).sum()
+                    )
+                else:
+                    free_to_max = None
+                    max_to_free = None
+                    super_to_max = None
+                    max_to_super = None
 
                 cohort_for_churn = "Cohort_prev"
 
@@ -297,19 +316,23 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
                             int(active_prev_mask.sum()),
                         ),
                         "premium_net_adds_proxy": _safe_ratio(
-                            int(free_to_super + free_to_max - super_to_free - max_to_free),
+                            int(free_to_super - super_to_free),
                             len(merged),
                         ),
-                        "max_net_adds_proxy": _safe_ratio(
-                            int(free_to_max + super_to_max - max_to_super - max_to_free),
-                            len(merged),
+                        "max_net_adds_proxy": (
+                            _safe_ratio(
+                                int(free_to_max + super_to_max - max_to_super - max_to_free),
+                                len(merged),
+                            )
+                            if max_transitions_reliable
+                            else None
                         ),
                         "free_to_super": int(free_to_super),
-                        "free_to_max": int(free_to_max),
+                        "free_to_max": int(free_to_max) if free_to_max is not None else None,
                         "super_to_free": int(super_to_free),
-                        "max_to_free": int(max_to_free),
-                        "super_to_max": int(super_to_max),
-                        "max_to_super": int(max_to_super),
+                        "max_to_free": int(max_to_free) if max_to_free is not None else None,
+                        "super_to_max": int(super_to_max) if super_to_max is not None else None,
+                        "max_to_super": int(max_to_super) if max_to_super is not None else None,
                     }
                 )
 
@@ -354,7 +377,7 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
 
         metrics_rows.append(row)
         previous_df = current_df[
-            ["Username", "Cohort", "Streak", "TotalXP", "SubscriptionState"]
+            ["Username", "Cohort", "Streak", "TotalXP", "HasPlus", "HasMax", "SubscriptionState"]
         ].copy()
 
     metrics_df = pd.DataFrame(metrics_rows)
@@ -508,8 +531,8 @@ def build_financial_signal_sheet_df(signal_package: dict[str, object]) -> pd.Dat
         "xp_delta_mean": "Croissance moyenne du XP contre la veille, borne a 0 si negative.",
         "reactivation_rate": "Part des inactifs de la veille redevenus actifs.",
         "churn_rate": "Part des actifs de la veille retombes a zero.",
-        "super_rate": "Part du panel observe qui est en abonnement Super (hors Max).",
-        "max_rate": "Part du panel observe qui est en abonnement Max.",
+        "super_rate": "Part observable du panel premium via HasPlus; tant que Max n'est pas fiablement detecte, ce taux peut inclure une partie des comptes Max.",
+        "max_rate": "Part du panel explicitement identifiee comme abonnement Max; affiche N/D si la detection Max n'est pas fiable.",
         "debutants_to_standard_rate": "Part des Debutants actifs de la veille qui ont progresse vers la cohorte Standard.",
         "debutants_abandon_rate": "Part des Debutants actifs de la veille tombes a zero aujourd'hui.",
         "standard_abandon_rate": "Part des Standard actifs de la veille tombes a zero aujourd'hui.",
@@ -659,7 +682,8 @@ def build_financial_signal_package(reference_date: str | None = None) -> dict[st
         },
         "assumptions": [
             "Panel behavior is a sample-based proxy, not Duolingo's full user base.",
-            "Super is measured as HasPlus excluding HasMax, while Max depends on profile-level Max detection.",
+            "Max is only reported when it is explicitly observable or manually overridden; otherwise it stays unknown.",
+            "Super currently reflects the observable premium bucket via HasPlus, and may still include some Max users until Max detection is reliable.",
             "Current outputs are explainable proxy signals, not supervised beat/miss probabilities yet.",
         ],
     }

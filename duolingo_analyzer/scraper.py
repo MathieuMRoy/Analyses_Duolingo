@@ -16,6 +16,7 @@ from .config import (
     DAILY_LOG_FILE,
     now_toronto,
 )
+from .subscription_detection import detect_has_max_from_user_payload, serialize_optional_bool
 
 MAX_RETRIES = 2  # Nombre de tentatives supplémentaires en cas d'échec
 
@@ -52,7 +53,7 @@ def _ensure_daily_log_schema() -> bool:
         if row == LEGACY_LOG_COLUMNS or row == LOG_COLUMNS:
             continue
         if len(row) == 6:
-            upgraded_rows.append(row + ["False"])
+            upgraded_rows.append(row + [""])
         elif len(row) >= 7:
             upgraded_rows.append(row[:7])
         else:
@@ -90,13 +91,13 @@ def _recuperer_profil(username: str) -> dict | None:
                 has_plus = user.get("hasPlus", False)
                 # Max est souvent indiqué par un tier spécifique ou un champ additionnel
                 # On tente de le détecter via hasMax ou subscriptionTier s'ils existent
-                has_max = user.get("hasMax", False) or user.get("subscriptionTier") == "max"
+                has_max = detect_has_max_from_user_payload(user)
                 
                 return {
                     "streak": int(streak) if streak is not None else 0,
                     "totalXp": int(total_xp) if total_xp is not None else 0,
                     "hasPlus": bool(has_plus),
-                    "hasMax": bool(has_max)
+                    "hasMax": has_max
                 }
 
             return None
@@ -194,7 +195,17 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
                 # Écriture immédiate (Thread safe via lock)
                 with open(DAILY_LOG_FILE, "a", newline="", encoding="utf-8") as f:
                     writer = csv.writer(f)
-                    writer.writerow([aujourdhui, user, cohorte, data["streak"], data["totalXp"], data["hasPlus"], data["hasMax"]])
+                    writer.writerow(
+                        [
+                            aujourdhui,
+                            user,
+                            cohorte,
+                            data["streak"],
+                            data["totalXp"],
+                            data["hasPlus"],
+                            serialize_optional_bool(data["hasMax"]),
+                        ]
+                    )
                 
                 if stats["succes"] % 25 == 0:
                     progression = (stats["succes"] + stats["erreurs"]) / len(utilisateurs_a_faire) * 100

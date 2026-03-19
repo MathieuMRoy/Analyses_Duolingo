@@ -14,6 +14,13 @@ from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE,
 from .excel_dashboard import refresh_trends_dashboard
 from .financial_signals import build_financial_signal_sheet_df
 from .quarterly_nowcast import build_quarterly_nowcast_raw_df
+from .subscription_detection import (
+    apply_max_overrides,
+    compute_max_count,
+    compute_super_observable_count,
+    parse_bool,
+    parse_optional_bool,
+)
 
 SUMMARY_SHEET = "📊 Résumé Financier Q1"
 AI_SHEET = "🤖 Analyse Stratégique"
@@ -149,13 +156,6 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
     return normalized.reset_index(drop=True)
 
 
-def _parse_bool(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    raw = str(value or "").strip().lower()
-    return raw in {"true", "1", "yes", "y", "vrai"}
-
-
 def _load_daily_log_df() -> pd.DataFrame:
     rows: list[dict[str, object]] = []
 
@@ -173,7 +173,7 @@ def _load_daily_log_df() -> pd.DataFrame:
 
             normalized_row = row[:]
             if len(normalized_row) == 6:
-                normalized_row.append("False")
+                normalized_row.append("")
             elif len(normalized_row) < 6:
                 continue
             elif len(normalized_row) > 7:
@@ -191,10 +191,27 @@ def _load_daily_log_df() -> pd.DataFrame:
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
     df["Streak"] = pd.to_numeric(df["Streak"], errors="coerce").fillna(0)
     df["TotalXP"] = pd.to_numeric(df["TotalXP"], errors="coerce").fillna(0)
-    df["HasPlus"] = df["HasPlus"].apply(_parse_bool)
-    df["HasMax"] = df["HasMax"].apply(_parse_bool)
+    df["HasPlus"] = df["HasPlus"].apply(parse_bool)
+    df["HasMax"] = df["HasMax"].apply(parse_optional_bool)
+    df = apply_max_overrides(df)
     df = df[df["Date"].notna()]
     return df
+
+
+def _compute_super_rate_pct(df_jour: pd.DataFrame) -> float | None:
+    if df_jour.empty or "HasPlus" not in df_jour.columns:
+        return None
+    super_count = compute_super_observable_count(df_jour["HasPlus"], df_jour.get("HasMax"))
+    return (super_count / len(df_jour)) * 100 if len(df_jour) else None
+
+
+def _compute_max_rate_pct(df_jour: pd.DataFrame) -> float | None:
+    if df_jour.empty or "HasMax" not in df_jour.columns:
+        return None
+    max_count = compute_max_count(df_jour["HasMax"])
+    if max_count is None:
+        return None
+    return (max_count / len(df_jour)) * 100 if len(df_jour) else None
 
 
 def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
@@ -226,17 +243,8 @@ def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
         moyenne_streak_hier = float(df_hier["Streak"].mean()) if not df_hier.empty else None
         delta_streak = round(moyenne_streak_jour - moyenne_streak_hier, 1) if moyenne_streak_hier is not None else None
 
-        taux_super = None
-        taux_max = None
-        if not df_jour.empty:
-            if "HasMax" in df_jour.columns:
-                taux_max = (len(df_jour[df_jour["HasMax"] == True]) / len(df_jour)) * 100 if len(df_jour) else None
-            if "HasPlus" in df_jour.columns:
-                if "HasMax" in df_jour.columns:
-                    super_count = len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)])
-                else:
-                    super_count = len(df_jour[df_jour["HasPlus"] == True])
-                taux_super = (super_count / len(df_jour)) * 100 if len(df_jour) else None
+        taux_super = _compute_super_rate_pct(df_jour)
+        taux_max = _compute_max_rate_pct(df_jour)
 
         delta_xp_moyen = 0.0
         taux_churn = 0.0
@@ -717,24 +725,11 @@ def calculer_statistiques() -> dict | None:
             else 0
         )
 
-        # Super = HasPlus hors Max
-        # Max = HasMax
+        # Tant que HasMax n'est pas observe de facon fiable,
+        # le taux Super reste un taux premium observable base sur HasPlus.
         if stats["nb_profils_jour"] > 0:
-            if "HasMax" in df_jour.columns:
-                abonnes_max = int(len(df_jour[df_jour["HasMax"] == True]))
-                stats["taux_conversion_max"] = (abonnes_max / stats["nb_profils_jour"]) * 100
-            else:
-                abonnes_max = 0
-                stats["taux_conversion_max"] = None
-
-            if "HasPlus" in df_jour.columns:
-                if "HasMax" in df_jour.columns:
-                    abonnes_super = int(len(df_jour[(df_jour["HasPlus"] == True) & (df_jour["HasMax"] != True)]))
-                else:
-                    abonnes_super = int(len(df_jour[df_jour["HasPlus"] == True]))
-                stats["taux_conversion_plus"] = (abonnes_super / stats["nb_profils_jour"]) * 100
-            else:
-                stats["taux_conversion_plus"] = None
+            stats["taux_conversion_max"] = _compute_max_rate_pct(df_jour)
+            stats["taux_conversion_plus"] = _compute_super_rate_pct(df_jour)
 
         if "Cohort" in df_jour.columns:
             for cohorte in stats["cohortes"].keys():
@@ -944,8 +939,8 @@ def sauvegarder_rapport_excel(
             df_glossaire = pd.DataFrame([
                 {"KPI": "Moyenne Streak (J)", "Définition": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité à long terme."},
                 {"KPI": "Apprentissage (XP/j)", "Définition": "Gain moyen de points d'expérience (XP) depuis hier. Mesure l'effort d'apprentissage quotidien."},
-                {"KPI": "Taux Abonn. Super", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Super Duolingo' (hasPlus) hors Duolingo Max."},
-                {"KPI": "Taux Abonn. Max", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Duolingo Max' (AI features)."},
+                {"KPI": "Taux Abonn. Super", "Définition": "Part observable du panel premium via hasPlus. Tant que Max n'est pas détecté de façon fiable, ce taux peut encore inclure une partie des comptes Max."},
+                {"KPI": "Taux Abonn. Max", "Définition": "Part du panel explicitement identifiée comme Duolingo Max. Affiche N/D si la détection Max n'est pas assez fiable."},
                 {"KPI": "Taux d'Abandon Global", "Définition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombe à 0)."},
                 {"KPI": "Reactivations vs Veille", "Définition": "Nombre d'utilisateurs inactifs hier (streak à 0) redevenus actifs aujourd'hui."},
                 {"KPI": "Progression Débutants vers Standard", "Définition": "Part des Débutants actifs hier qui sont encore actifs aujourd'hui et ont progressé vers la cohorte Standard."},
