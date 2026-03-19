@@ -227,6 +227,7 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
             "super_to_max": None,
             "max_to_super": None,
             "high_value_retention_rate": None,
+            "debutants_to_standard_rate": None,
             "debutants_abandon_rate": None,
             "standard_abandon_rate": None,
             "super_actifs_abandon_rate": None,
@@ -280,7 +281,7 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
                     & (merged["SubscriptionState_curr"] == "super")
                 ).sum()
 
-                cohort_for_churn = "Cohort_curr" if "Cohort_curr" in merged.columns else "Cohort_prev"
+                cohort_for_churn = "Cohort_prev"
 
                 row.update(
                     {
@@ -336,6 +337,20 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
                         ((cohort_df["Streak_prev"] > 0) & (cohort_df["Streak_curr"] == 0)).sum()
                     )
                     row[output_key] = _safe_ratio(cohort_churn, prev_active)
+
+                debutants_prev = merged[merged["Cohort_prev"] == "Debutants"]
+                debutants_prev_active = int((debutants_prev["Streak_prev"] > 0).sum())
+                transitions_debutants_standard = int(
+                    (
+                        (debutants_prev["Streak_prev"] > 0)
+                        & (debutants_prev["Streak_curr"] > 0)
+                        & (debutants_prev["Cohort_curr"] == "Standard")
+                    ).sum()
+                )
+                row["debutants_to_standard_rate"] = _safe_ratio(
+                    transitions_debutants_standard,
+                    debutants_prev_active,
+                )
 
         metrics_rows.append(row)
         previous_df = current_df[
@@ -495,6 +510,10 @@ def build_financial_signal_sheet_df(signal_package: dict[str, object]) -> pd.Dat
         "churn_rate": "Part des actifs de la veille retombes a zero.",
         "super_rate": "Part du panel observe qui est en abonnement Super (hors Max).",
         "max_rate": "Part du panel observe qui est en abonnement Max.",
+        "debutants_to_standard_rate": "Part des Debutants actifs de la veille qui ont progresse vers la cohorte Standard.",
+        "debutants_abandon_rate": "Part des Debutants actifs de la veille tombes a zero aujourd'hui.",
+        "standard_abandon_rate": "Part des Standard actifs de la veille tombes a zero aujourd'hui.",
+        "super_actifs_abandon_rate": "Part des Super-Actifs actifs de la veille tombes a zero aujourd'hui.",
     }.items():
         _add("Business", key, business.get(key), definition)
 
@@ -603,6 +622,7 @@ def build_financial_signal_package(reference_date: str | None = None) -> dict[st
             "max_rate": _round_or_none(latest_row.get("max_rate")),
             "high_value_active_rate": _round_or_none(latest_row.get("high_value_active_rate")),
             "high_value_retention_rate": _round_or_none(latest_row.get("high_value_retention_rate")),
+            "debutants_to_standard_rate": _round_or_none(latest_row.get("debutants_to_standard_rate")),
             "debutants_abandon_rate": _round_or_none(latest_row.get("debutants_abandon_rate")),
             "standard_abandon_rate": _round_or_none(latest_row.get("standard_abandon_rate")),
             "super_actifs_abandon_rate": _round_or_none(latest_row.get("super_actifs_abandon_rate")),

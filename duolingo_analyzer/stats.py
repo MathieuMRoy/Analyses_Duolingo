@@ -30,10 +30,6 @@ PERCENT_COLUMNS = {
     "Taux Abonn. Super",
     "Taux Abonn. Max",
     "Taux d'Abandon Global",
-    "Progression Débutants vers Standard",
-    "Abandon Débutants",
-    "Abandon Standard",
-    "Abandon Super-Actifs",
     "Score d'Engagement",
 }
 
@@ -54,10 +50,6 @@ SUMMARY_COLUMNS = [
     "Taux Abonn. Max",
     "Taux d'Abandon Global",
     "Reactivations vs Veille",
-    "Progression Débutants vers Standard",
-    "Abandon Débutants",
-    "Abandon Standard",
-    "Abandon Super-Actifs",
     "Score d'Engagement",
     "Panel Total",
 ]
@@ -782,12 +774,6 @@ def sauvegarder_rapport_excel(
                 if isinstance(stats.get("taux_conversion_max"), numbers.Number) else None,
             "Taux d'Abandon Global": round(stats.get("taux_churn", 0) / 100, 6),
             "Reactivations vs Veille": stats.get("reactivations_veille", 0),
-            "Progression Débutants vers Standard": round(
-                stats.get("taux_progression_debutants_vers_standard", 0) / 100, 6
-            ),
-            "Abandon Débutants": round(stats.get("cohortes", {}).get("Debutants", {}).get("churn", 0) / 100, 6),
-            "Abandon Standard": round(stats.get("cohortes", {}).get("Standard", {}).get("churn", 0) / 100, 6),
-            "Abandon Super-Actifs": round(stats.get("cohortes", {}).get("Super-Actifs", {}).get("churn", 0) / 100, 6),
             "Score d'Engagement": round(stats.get("score_sante_jour", 0) / 100, 6),
             "Panel Total": stats.get("nb_profils_jour"),
         }])
@@ -796,6 +782,7 @@ def sauvegarder_rapport_excel(
         if df_resume is None or df_resume.empty:
             df_resume = df_stats.copy()
         else:
+            df_resume = _normalize_summary_df(df_resume)
             if "Date" in df_resume.columns:
                 df_resume["Date"] = pd.to_datetime(df_resume["Date"], errors="coerce")
             df_stats["Date"] = pd.to_datetime(df_stats["Date"], errors="coerce")
@@ -1211,6 +1198,10 @@ def sauvegarder_rapport_excel(
                 ("High-value retention", _pretty_delta_pts(proxy.get("high_value_retention_trend"))),
                 ("Super rate", _pretty_ratio_pct(business.get("super_rate"), 1)),
                 ("Max rate", _pretty_ratio_pct(business.get("max_rate"), 1)),
+                ("Progression Débutants -> Standard", _pretty_ratio_pct(business.get("debutants_to_standard_rate"), 1)),
+                ("Abandon Débutants", _pretty_ratio_pct(business.get("debutants_abandon_rate"), 1)),
+                ("Abandon Standard", _pretty_ratio_pct(business.get("standard_abandon_rate"), 1)),
+                ("Abandon Super-Actifs", _pretty_ratio_pct(business.get("super_actifs_abandon_rate"), 1)),
                 (
                     "Model readiness",
                     "Probabilites implicites disponibles; calibration supervisee a enrichir d'abord avec l'historique de guidance management, puis avec le consensus.",
