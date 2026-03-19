@@ -76,6 +76,7 @@ SUMMARY_COLUMN_ALIASES = {
 }
 
 DAILY_LOG_COLUMNS = ["Date", "Username", "Cohort", "Streak", "TotalXP", "HasPlus", "HasMax"]
+SUMMARY_MIN_RELIABLE_DATE = pd.Timestamp("2026-03-16")
 
 
 def _parse_float(value: object) -> float | None:
@@ -131,6 +132,7 @@ def _normalize_summary_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if "Date" in normalized.columns:
         normalized = normalized[normalized["Date"].notna()]
+        normalized = normalized[normalized["Date"] >= SUMMARY_MIN_RELIABLE_DATE]
     if "Panel Total" in normalized.columns:
         panel_total_numeric = pd.to_numeric(normalized["Panel Total"], errors="coerce")
         normalized = normalized[panel_total_numeric.fillna(0) > 0]
