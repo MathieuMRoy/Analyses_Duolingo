@@ -3,8 +3,8 @@
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *"
-    - cron: "0 1 * * *"
+    - cron: "7 0 * * *"
+    - cron: "7 1 * * *"
 
 concurrency:
   group: duolingo-daily-report
@@ -78,6 +78,10 @@ jobs:
         if: steps.gate.outputs.run_now == 'true'
         run: python main.py
 
+      - name: Rebuild historical workbook
+        if: steps.gate.outputs.run_now == 'true'
+        run: python scripts_utilitaires/build_historique.py
+
       - name: Push updated files to Google Drive
         if: steps.gate.outputs.run_now == 'true'
         run: python scripts_utilitaires/google_drive_sync.py push
@@ -90,5 +94,6 @@ jobs:
           path: |
             rapports_donnees/rapport_historique.xlsx
             daily_streaks_log.csv
+
 
 
