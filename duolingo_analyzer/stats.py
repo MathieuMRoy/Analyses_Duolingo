@@ -15,7 +15,7 @@ from .excel_dashboard import refresh_trends_dashboard
 from .financial_signals import build_financial_signal_sheet_df
 from .quarterly_nowcast import build_quarterly_nowcast_raw_df
 from .reporting.sheets.financial_nowcast_sheet import render_financial_nowcast_sheet
-from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df
+from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from .reporting.sheets.monthly_trends_sheet import add_monthly_trends_chart, build_monthly_trends_frames
 from .reporting.sheets.quarterly_nowcast_sheet import render_quarterly_nowcast_sheet
 from .reporting.sheets.summary_sheet import build_summary_today_df, merge_summary_history
@@ -936,6 +936,11 @@ def sauvegarder_rapport_excel(
             if sheet_name == QUARTERLY_SHEET and quarterly_nowcast:
                 render_quarterly_nowcast_sheet(ws, quarterly_nowcast, wb, QUARTERLY_RAW_SHEET, style_ctx)
                 ws.freeze_panes = "A5"
+                continue
+
+            if sheet_name == GLOSSAIRE_SHEET:
+                render_kpi_dictionary_sheet(ws, style_ctx)
+                ws.freeze_panes = "A10"
                 continue
 
             if sheet_name == TRENDS_SHEET:

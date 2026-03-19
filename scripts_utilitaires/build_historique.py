@@ -3,10 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import pandas as pd
+from openpyxl import load_workbook
 
 from duolingo_analyzer.config import REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
-from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df
+from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
+from duolingo_analyzer.reporting.styles import build_style_context
 from duolingo_analyzer.stats import GLOSSAIRE_SHEET, SUMMARY_SHEET, _normalize_summary_df
 from scripts_utilitaires.restyle_report import restyle_report
 
@@ -52,6 +54,11 @@ def build_historique() -> None:
     # Appliquer le style pro (convertit aussi les valeurs texte en nombres)
     restyle_report(HISTO_FILE)
     refresh_trends_dashboard(HISTO_FILE)
+
+    wb = load_workbook(HISTO_FILE)
+    if GLOSSAIRE_SHEET in wb.sheetnames:
+        render_kpi_dictionary_sheet(wb[GLOSSAIRE_SHEET], build_style_context())
+    wb.save(HISTO_FILE)
 
     print(f"OK: {HISTO_FILE}")
 
