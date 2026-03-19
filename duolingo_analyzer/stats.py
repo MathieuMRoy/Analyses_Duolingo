@@ -30,6 +30,7 @@ PERCENT_COLUMNS = {
     "Taux Abonn. Super",
     "Taux Abonn. Max",
     "Taux d'Abandon Global",
+    "Progression Débutants vers Standard",
     "Abandon Débutants",
     "Abandon Standard",
     "Abandon Super-Actifs",
@@ -53,6 +54,7 @@ SUMMARY_COLUMNS = [
     "Taux Abonn. Max",
     "Taux d'Abandon Global",
     "Reactivations vs Veille",
+    "Progression Débutants vers Standard",
     "Abandon Débutants",
     "Abandon Standard",
     "Abandon Super-Actifs",
@@ -75,6 +77,8 @@ SUMMARY_COLUMN_ALIASES = {
     "Taux d'Abandon Global": "Taux d'Abandon Global",
     "Taux d'Attrition Global": "Taux d'Abandon Global",
     "Reactivations vs Veille": "Reactivations vs Veille",
+    "Progression Débutants vers Standard": "Progression Débutants vers Standard",
+    "Transitions Débutants vers Standard": "Progression Débutants vers Standard",
     "Churn Débutants": "Abandon Débutants",
     "Abandon Débutants": "Abandon Débutants",
     "Churn Standard": "Abandon Standard",
@@ -543,15 +547,41 @@ def calculer_statistiques() -> dict | None:
         "utilisateurs_actifs": 0,
         "streaks_tombes_zero": 0,
         "reactivations_veille": 0,
+        "progression_debutants_vers_standard": 0,
+        "taux_progression_debutants_vers_standard": 0.0,
         "nb_profils_jour": len(df_jour),
         "nb_profils_hier": len(df_hier),
         "taux_conversion_plus": None,
         "taux_conversion_max": None,
         "delta_xp_moyen": 0.0,
         "cohortes": {
-            "Debutants": {"actifs": 0, "total": 0, "retention": 0.0, "churn": 0.0, "tombes_zero": 0},
-            "Standard": {"actifs": 0, "total": 0, "retention": 0.0, "churn": 0.0, "tombes_zero": 0},
-            "Super-Actifs": {"actifs": 0, "total": 0, "retention": 0.0, "churn": 0.0, "tombes_zero": 0},
+            "Debutants": {
+                "actifs": 0,
+                "total": 0,
+                "retention": 0.0,
+                "churn": 0.0,
+                "tombes_zero": 0,
+                "transitions_sortantes": 0,
+                "transition_vers_standard": 0.0,
+            },
+            "Standard": {
+                "actifs": 0,
+                "total": 0,
+                "retention": 0.0,
+                "churn": 0.0,
+                "tombes_zero": 0,
+                "transitions_sortantes": 0,
+                "transition_vers_standard": 0.0,
+            },
+            "Super-Actifs": {
+                "actifs": 0,
+                "total": 0,
+                "retention": 0.0,
+                "churn": 0.0,
+                "tombes_zero": 0,
+                "transitions_sortantes": 0,
+                "transition_vers_standard": 0.0,
+            },
         },
     }
 
@@ -624,9 +654,9 @@ def calculer_statistiques() -> dict | None:
             else 0
         )
 
-        if "Cohort_jour" in merged.columns:
+        if "Cohort_hier" in merged.columns:
             for cohorte in stats["cohortes"].keys():
-                merged_c = merged[merged["Cohort_jour"] == cohorte]
+                merged_c = merged[merged["Cohort_hier"] == cohorte]
                 tombes_c = merged_c[
                     (merged_c["Streak_hier"] > 0) & (merged_c["Streak_jour"] == 0)
                 ]
@@ -642,6 +672,25 @@ def calculer_statistiques() -> dict | None:
                     stats["cohortes"][cohorte]["retention"] = (
                         (actifs_hier_c - len(tombes_c)) / actifs_hier_c
                     ) * 100
+
+            if "Cohort_jour" in merged.columns:
+                transitions_deb_standard = merged[
+                    (merged["Cohort_hier"] == "Debutants")
+                    & (merged["Streak_hier"] > 0)
+                    & (merged["Streak_jour"] > 0)
+                    & (merged["Cohort_jour"] == "Standard")
+                ]
+                actifs_hier_debutants = (
+                    int(len(df_hier[(df_hier["Cohort"] == "Debutants") & (df_hier["Streak"] > 0)]))
+                    if "Cohort" in df_hier.columns
+                    else 0
+                )
+                stats["progression_debutants_vers_standard"] = int(len(transitions_deb_standard))
+                stats["cohortes"]["Debutants"]["transitions_sortantes"] = int(len(transitions_deb_standard))
+                if actifs_hier_debutants > 0:
+                    taux_transition = (len(transitions_deb_standard) / actifs_hier_debutants) * 100
+                    stats["taux_progression_debutants_vers_standard"] = taux_transition
+                    stats["cohortes"]["Debutants"]["transition_vers_standard"] = taux_transition
     else:
         print("  ⚠️ Aucune donnée pour hier — comparaison impossible.\n")
         stats["taux_retention"] = 0
@@ -664,6 +713,11 @@ def calculer_statistiques() -> dict | None:
     print(f"     • Ruptures de Série (abandons) : {stats['streaks_tombes_zero']}")
     print(f"     • Taux d'Abandon Global : {stats.get('taux_churn', 0):.1f}%")
     print(f"     • Reactivations vs veille : {stats.get('reactivations_veille', 0)}")
+    print(
+        "     • Progression Débutants -> Standard : "
+        f"{stats.get('progression_debutants_vers_standard', 0)} "
+        f"({stats.get('taux_progression_debutants_vers_standard', 0):.1f}%)"
+    )
 
     print("\n     • Analyse par Segment (Cohorte) :")
     for nom, donnees in stats["cohortes"].items():
@@ -728,6 +782,9 @@ def sauvegarder_rapport_excel(
                 if isinstance(stats.get("taux_conversion_max"), numbers.Number) else None,
             "Taux d'Abandon Global": round(stats.get("taux_churn", 0) / 100, 6),
             "Reactivations vs Veille": stats.get("reactivations_veille", 0),
+            "Progression Débutants vers Standard": round(
+                stats.get("taux_progression_debutants_vers_standard", 0) / 100, 6
+            ),
             "Abandon Débutants": round(stats.get("cohortes", {}).get("Debutants", {}).get("churn", 0) / 100, 6),
             "Abandon Standard": round(stats.get("cohortes", {}).get("Standard", {}).get("churn", 0) / 100, 6),
             "Abandon Super-Actifs": round(stats.get("cohortes", {}).get("Super-Actifs", {}).get("churn", 0) / 100, 6),
@@ -773,9 +830,10 @@ def sauvegarder_rapport_excel(
                 {"KPI": "Taux Abonn. Max", "Définition": "Pourcentage d'utilisateurs possédant un abonnement 'Duolingo Max' (AI features)."},
                 {"KPI": "Taux d'Abandon Global", "Définition": "Pourcentage d'utilisateurs actifs hier qui ne le sont plus aujourd'hui (streak retombe à 0)."},
                 {"KPI": "Reactivations vs Veille", "Définition": "Nombre d'utilisateurs inactifs hier (streak à 0) redevenus actifs aujourd'hui."},
-                {"KPI": "Abandon Débutants", "Définition": "Taux d'abandon spécifique aux utilisateurs ayant moins de 1000 XP au total."},
-                {"KPI": "Abandon Standard", "Définition": "Taux d'abandon spécifique aux utilisateurs ayant entre 1000 et 5000 XP."},
-                {"KPI": "Abandon Super-Actifs", "Définition": "Taux d'abandon spécifique à l'élite ayant plus de 5000 XP."},
+                {"KPI": "Progression Débutants vers Standard", "Définition": "Part des Débutants actifs hier qui sont encore actifs aujourd'hui et ont progressé vers la cohorte Standard."},
+                {"KPI": "Abandon Débutants", "Définition": "Taux d'abandon parmi les utilisateurs qui étaient Débutants et actifs hier, puis sont tombés à une streak de 0 aujourd'hui."},
+                {"KPI": "Abandon Standard", "Définition": "Taux d'abandon parmi les utilisateurs qui étaient Standard et actifs hier, puis sont tombés à une streak de 0 aujourd'hui."},
+                {"KPI": "Abandon Super-Actifs", "Définition": "Taux d'abandon parmi les utilisateurs qui étaient Super-Actifs et actifs hier, puis sont tombés à une streak de 0 aujourd'hui."},
                 {"KPI": "Score Santé Global", "Définition": "Pourcentage des utilisateurs suivis qui ont un streak > 0 aujourd'hui."},
             ])
             df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
@@ -2203,6 +2261,14 @@ def sauvegarder_rapport_excel(
                             pass
 
                     elif sheet_name == SUMMARY_SHEET and "reactiv" in header_key:
+                        try:
+                            if float(cell.value) > 0:
+                                cell.fill = success_fill
+                                cell.font = Font(name=BASE_FONT_NAME, size=11, color="008000", bold=True)
+                        except Exception:
+                            pass
+
+                    elif sheet_name == SUMMARY_SHEET and "progression" in header_key:
                         try:
                             if float(cell.value) > 0:
                                 cell.fill = success_fill
