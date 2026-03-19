@@ -6,7 +6,8 @@ import pandas as pd
 
 from duolingo_analyzer.config import REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
-from duolingo_analyzer.stats import SUMMARY_SHEET, _normalize_summary_df
+from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df
+from duolingo_analyzer.stats import GLOSSAIRE_SHEET, SUMMARY_SHEET, _normalize_summary_df
 from scripts_utilitaires.restyle_report import restyle_report
 
 
@@ -42,8 +43,11 @@ def build_historique() -> None:
     df_all = pd.concat(frames, ignore_index=True)
     df_all = _normalize_summary_df(df_all)
 
+    df_glossaire = build_kpi_dictionary_df()
+
     with pd.ExcelWriter(HISTO_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
         df_all.to_excel(writer, sheet_name=SUMMARY_SHEET, index=False)
+        df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
 
     # Appliquer le style pro (convertit aussi les valeurs texte en nombres)
     restyle_report(HISTO_FILE)
