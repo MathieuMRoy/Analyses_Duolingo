@@ -5,7 +5,7 @@ import shutil
 import pandas as pd
 from openpyxl import load_workbook
 
-from duolingo_analyzer.config import REPORT_DIR
+from duolingo_analyzer.config import RAPPORT_EXCEL_FILE, REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
 from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from duolingo_analyzer.reporting.styles import build_style_context
@@ -31,9 +31,9 @@ def build_historique() -> None:
         print("Aucun rapport journalier trouvé.")
         return
 
-    latest_report = report_files[-1]
+    base_report = RAPPORT_EXCEL_FILE if RAPPORT_EXCEL_FILE.exists() else report_files[-1]
 
-    shutil.copyfile(latest_report, HISTO_FILE)
+    shutil.copyfile(base_report, HISTO_FILE)
 
     frames: list[pd.DataFrame] = []
     for report_path in report_files:

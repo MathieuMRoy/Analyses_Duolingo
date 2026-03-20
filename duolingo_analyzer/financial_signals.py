@@ -565,35 +565,44 @@ def build_financial_signal_sheet_df(signal_package: dict[str, object]) -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def build_financial_signal_package(reference_date: str | None = None) -> dict[str, object] | None:
-    target_df = _load_target_panel_df()
-    log_df = _load_daily_log_df()
-    if log_df.empty:
-        return None
+def _build_signal_package_from_metrics(
+    metrics_df: pd.DataFrame,
+    target_df: pd.DataFrame,
+    reference_date: str,
+) -> dict[str, object] | None:
+    """Build a financial signal package for a specific date using pre-computed metrics.
 
-    if reference_date is None:
-        reference_date = now_toronto().strftime("%Y-%m-%d")
-
-    metrics_df = _build_daily_metrics(log_df, len(target_df))
+    Only metrics up to (and including) ``reference_date`` are used so that
+    rolling-window calculations are correct when replaying historical dates.
+    """
     if metrics_df.empty:
         return None
 
-    latest_metrics_df = metrics_df[metrics_df["Date"] == pd.to_datetime(reference_date)]
+    ref_ts = pd.to_datetime(reference_date, errors="coerce")
+    if pd.isna(ref_ts):
+        return None
+
+    # Use only metrics up to the reference date for rolling window correctness
+    metrics_up_to_date = metrics_df[metrics_df["Date"] <= ref_ts].copy()
+    if metrics_up_to_date.empty:
+        return None
+
+    latest_metrics_df = metrics_up_to_date[metrics_up_to_date["Date"] == ref_ts]
     if latest_metrics_df.empty:
-        latest_metrics_df = metrics_df.tail(1)
+        latest_metrics_df = metrics_up_to_date.tail(1)
 
     latest_row = latest_metrics_df.iloc[-1]
 
     engagement_quality_index = _build_engagement_quality_index(latest_row)
-    engagement_quality_trend = _window_delta(metrics_df["active_rate"], 7)
-    premium_momentum_14d = _window_delta(metrics_df["super_rate"], 7)
-    max_momentum_14d = _window_delta(metrics_df["max_rate"], 7)
-    churn_trend_14d = _window_delta(metrics_df["churn_rate"], 7)
-    reactivation_trend_7d = _window_delta(metrics_df["reactivation_rate"], 7)
-    high_value_retention_trend = _window_delta(metrics_df["high_value_retention_rate"], 7)
-    premium_net_adds_proxy_7d = _window_average(metrics_df["premium_net_adds_proxy"], 7)
-    max_net_adds_proxy_7d = _window_average(metrics_df["max_net_adds_proxy"], 7)
-    growth_acceleration_7d = _window_delta(metrics_df["xp_delta_mean"], 7)
+    engagement_quality_trend = _window_delta(metrics_up_to_date["active_rate"], 7)
+    premium_momentum_14d = _window_delta(metrics_up_to_date["super_rate"], 7)
+    max_momentum_14d = _window_delta(metrics_up_to_date["max_rate"], 7)
+    churn_trend_14d = _window_delta(metrics_up_to_date["churn_rate"], 7)
+    reactivation_trend_7d = _window_delta(metrics_up_to_date["reactivation_rate"], 7)
+    high_value_retention_trend = _window_delta(metrics_up_to_date["high_value_retention_rate"], 7)
+    premium_net_adds_proxy_7d = _window_average(metrics_up_to_date["premium_net_adds_proxy"], 7)
+    max_net_adds_proxy_7d = _window_average(metrics_up_to_date["max_net_adds_proxy"], 7)
+    growth_acceleration_7d = _window_delta(metrics_up_to_date["xp_delta_mean"], 7)
 
     subscription_momentum_proxy = _safe_mean(
         [
@@ -616,15 +625,15 @@ def build_financial_signal_package(reference_date: str | None = None) -> dict[st
         2,
     )
 
-    main_drivers, main_risks = _derive_main_drivers(latest_row, metrics_df)
-    confidence_level = _build_confidence_level(latest_row, metrics_df)
+    main_drivers, main_risks = _derive_main_drivers(latest_row, metrics_up_to_date)
+    confidence_level = _build_confidence_level(latest_row, metrics_up_to_date)
     signal_bias = _build_signal_bias(latest_row, monetization_momentum_index, engagement_quality_index)
 
     package: dict[str, object] = {
         "metadata": {
             "phase": "phase_1_feature_and_proxy_layer",
             "as_of_date": latest_row["Date"].strftime("%Y-%m-%d"),
-            "observed_days": int(len(metrics_df)),
+            "observed_days": int(len(metrics_up_to_date)),
             "source": "daily_streaks_log.csv + target_users.csv",
         },
         "panel": {
@@ -691,6 +700,20 @@ def build_financial_signal_package(reference_date: str | None = None) -> dict[st
     return package
 
 
+def build_financial_signal_package(reference_date: str | None = None) -> dict[str, object] | None:
+    """Build a financial signal package for a single reference date (legacy API)."""
+    target_df = _load_target_panel_df()
+    log_df = _load_daily_log_df()
+    if log_df.empty:
+        return None
+
+    if reference_date is None:
+        reference_date = now_toronto().strftime("%Y-%m-%d")
+
+    metrics_df = _build_daily_metrics(log_df, len(target_df))
+    return _build_signal_package_from_metrics(metrics_df, target_df, reference_date)
+
+
 def save_financial_signal_package(signal_package: dict[str, object]) -> tuple[Path, Path]:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -716,8 +739,42 @@ def save_financial_signal_package(signal_package: dict[str, object]) -> tuple[Pa
 
 
 def generate_financial_signal_package(reference_date: str | None = None) -> dict[str, object] | None:
-    signal_package = build_financial_signal_package(reference_date=reference_date)
-    if not signal_package:
+    """Generate signal packages for ALL available dates and save to history.
+
+    Each pipeline run rebuilds the full signal history from the daily log,
+    ensuring ``financial_signals_history.csv`` always reflects every observed
+    day — even if the file was previously lost or only partially populated.
+
+    Returns the signal package for the *reference_date* (or the latest date).
+    """
+    target_df = _load_target_panel_df()
+    log_df = _load_daily_log_df()
+    if log_df.empty:
         return None
-    save_financial_signal_package(signal_package)
-    return signal_package
+
+    if reference_date is None:
+        reference_date = now_toronto().strftime("%Y-%m-%d")
+
+    metrics_df = _build_daily_metrics(log_df, len(target_df))
+    if metrics_df.empty:
+        return None
+
+    # Build and save a signal package for EVERY date in the daily log
+    all_dates = sorted(metrics_df["Date"].dropna().unique())
+    latest_package: dict[str, object] | None = None
+
+    for date_val in all_dates:
+        date_str = pd.Timestamp(date_val).strftime("%Y-%m-%d")
+        package = _build_signal_package_from_metrics(metrics_df, target_df, date_str)
+        if package:
+            save_financial_signal_package(package)
+            latest_package = package
+
+    # If the reference_date wasn't among the available dates, build it too
+    if latest_package is None or str(latest_package.get("metadata", {}).get("as_of_date")) != reference_date:
+        ref_package = _build_signal_package_from_metrics(metrics_df, target_df, reference_date)
+        if ref_package:
+            save_financial_signal_package(ref_package)
+            latest_package = ref_package
+
+    return latest_package
