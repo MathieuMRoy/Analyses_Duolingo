@@ -275,7 +275,7 @@ def render_kpi_dictionary_sheet(
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("A5:C7", "Commencez par les KPI du Résumé Financier Q1 et de Signaux Financiers. Revenez ici seulement lorsqu'un indicateur vous pose question.", fill=soft_blue, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
+    write_box("A5:C7", "Commencez par les KPI du Suivi Quotidien et de Signaux Financiers. Revenez ici seulement lorsqu'un indicateur vous pose question.", fill=soft_blue, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
     write_box("D5:F7", "Ordre de lecture conseillé : 1. Lecture quotidienne  2. Transitions et churn  3. Nowcast trimestriel.", fill=soft_green, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
     write_box("G5:H7", "Astuce : si vous voulez aller vite, ne lisez que la colonne 'Lecture utile'.", fill=soft_plum, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
 

@@ -9,7 +9,13 @@ from duolingo_analyzer.config import REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
 from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from duolingo_analyzer.reporting.styles import build_style_context
-from duolingo_analyzer.stats import GLOSSAIRE_RAW_SHEET, GLOSSAIRE_SHEET, SUMMARY_SHEET, _normalize_summary_df
+from duolingo_analyzer.stats import (
+    GLOSSAIRE_RAW_SHEET,
+    GLOSSAIRE_SHEET,
+    SUMMARY_SHEET,
+    _load_summary_sheet,
+    _normalize_summary_df,
+)
 from scripts_utilitaires.restyle_report import restyle_report
 
 
@@ -32,7 +38,7 @@ def build_historique() -> None:
     frames: list[pd.DataFrame] = []
     for report_path in report_files:
         try:
-            df = pd.read_excel(report_path, sheet_name=SUMMARY_SHEET)
+            df = _load_summary_sheet(report_path)
             if df is not None and not df.empty:
                 frames.append(_normalize_summary_df(df))
         except Exception:

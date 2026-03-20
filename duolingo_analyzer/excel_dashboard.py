@@ -14,7 +14,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .config import DAILY_LOG_FILE
 
-SUMMARY_SHEET = "📊 Résumé Financier Q1"
+SUMMARY_SHEET = "Suivi Quotidien"
 TREND_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Données Graphique"
 

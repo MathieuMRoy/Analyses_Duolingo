@@ -29,7 +29,7 @@ from .subscription_detection import (
     parse_optional_bool,
 )
 
-SUMMARY_SHEET = "📊 Résumé Financier Q1"
+SUMMARY_SHEET = "Suivi Quotidien"
 AI_SHEET = "🤖 Analyse Stratégique"
 GLOSSAIRE_SHEET = "📖 Dictionnaire des KPIs"
 GLOSSAIRE_RAW_SHEET = "Dictionnaire des KPIs - Raw"

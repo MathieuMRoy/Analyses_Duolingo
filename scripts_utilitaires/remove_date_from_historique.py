@@ -7,7 +7,7 @@ import sys
 from openpyxl import load_workbook
 
 
-SUMMARY_SHEET = "📊 Résumé Financier Q1"
+SUMMARY_SHEET = "Suivi Quotidien"
 
 
 def _parse_date(value: object) -> datetime.date | None:
