@@ -101,9 +101,10 @@ def render_quarterly_nowcast_sheet(
             return f"={fallback}"
         target_column = raw_headers[header]
         return (
-            f'=IFERROR(XLOOKUP({quarter_ref},'
-            f'{raw_sheet_ref}!${quarter_column}:${quarter_column},'
-            f'{raw_sheet_ref}!${target_column}:${target_column},{fallback}),{fallback})'
+            f'=IFERROR(INDEX('
+            f'{raw_sheet_ref}!${target_column}:${target_column},'
+            f'MATCH({quarter_ref},{raw_sheet_ref}!${quarter_column}:${quarter_column},0)'
+            f'),{fallback})'
         )
 
     def _raw_lookup_expr(header: str, fallback: str = '"N/D"', quarter_ref: str = "$C$4") -> str:
