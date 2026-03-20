@@ -7,6 +7,7 @@ import json
 import random
 import time
 import threading
+from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
@@ -227,3 +228,38 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
     print("\n  ✅ Collecte ULTRA-SPEED terminée !")
     print(f"     → Success: {stats['succes']}, Erreurs: {stats['erreurs']}")
     return aujourdhui
+
+
+RETENTION_DAYS = 7  # Nombre de jours de données à conserver
+
+
+def purger_anciennes_donnees() -> None:
+    """Supprime les lignes de plus de RETENTION_DAYS jours du daily log."""
+    if not DAILY_LOG_FILE.exists():
+        return
+
+    cutoff = (now_toronto() - timedelta(days=RETENTION_DAYS)).strftime("%Y-%m-%d")
+
+    try:
+        with open(DAILY_LOG_FILE, "r", encoding="utf-8", newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return
+            rows = list(reader)
+    except Exception:
+        return
+
+    kept = [row for row in rows if row and row[0] >= cutoff]
+    removed = len(rows) - len(kept)
+
+    if removed == 0:
+        return
+
+    with open(DAILY_LOG_FILE, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(kept)
+
+    print(f"  🧹 Purge du log : {removed} lignes supprimées (avant {cutoff}), {len(kept)} conservées.")
+

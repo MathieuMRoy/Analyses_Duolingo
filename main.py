@@ -10,7 +10,7 @@ from duolingo_analyzer.config import TARGET_USERS_FILE
 from duolingo_analyzer.discovery import initialiser_cibles
 from duolingo_analyzer.financial_signals import generate_financial_signal_package
 from duolingo_analyzer.quarterly_nowcast import generate_quarterly_nowcast_package
-from duolingo_analyzer.scraper import collecter_streaks_quotidiens
+from duolingo_analyzer.scraper import collecter_streaks_quotidiens, purger_anciennes_donnees
 from duolingo_analyzer.stats import calculer_statistiques, sauvegarder_rapport_excel
 from duolingo_analyzer.valuation_dcf import generate_dcf_valuation_package
 
@@ -34,6 +34,7 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     collecter_streaks_quotidiens(utilisateurs_cibles)
+    purger_anciennes_donnees()
 
     statistiques = calculer_statistiques()
     if not statistiques:
