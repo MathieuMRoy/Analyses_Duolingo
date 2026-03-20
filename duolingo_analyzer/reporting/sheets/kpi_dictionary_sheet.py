@@ -6,6 +6,7 @@ import math
 
 import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.datavalidation import DataValidation
 
 
 def build_kpi_dictionary_df() -> pd.DataFrame:
@@ -147,14 +148,19 @@ def build_kpi_dictionary_df() -> pd.DataFrame:
     return pd.DataFrame(daily_rows + transition_rows + quarterly_rows)
 
 
-def render_kpi_dictionary_sheet(ws, styles: dict[str, object]) -> None:
+def render_kpi_dictionary_sheet(
+    ws,
+    wb,
+    raw_sheet_name: str,
+    styles: dict[str, object],
+) -> None:
     for merged_range in list(ws.merged_cells.ranges):
         ws.unmerge_cells(str(merged_range))
     if ws.max_row:
         ws.delete_rows(1, ws.max_row)
 
     ws.sheet_view.showGridLines = False
-    ws.freeze_panes = "A10"
+    ws.freeze_panes = "A12"
 
     for column_letter, width in {
         "A": 15,
@@ -221,6 +227,43 @@ def render_kpi_dictionary_sheet(ws, styles: dict[str, object]) -> None:
         return total
 
     rows = build_kpi_dictionary_df().to_dict("records")
+    available_sections = ["Toutes"]
+    for row in rows:
+        section = str(row.get("Section") or "").strip()
+        if section and section not in available_sections:
+            available_sections.append(section)
+
+    raw_ws = wb[raw_sheet_name] if raw_sheet_name in wb.sheetnames else None
+    raw_headers = {}
+    if raw_ws and raw_ws.max_row >= 1:
+        raw_headers = {
+            str(cell.value): idx
+            for idx, cell in enumerate(raw_ws[1], start=1)
+            if cell.value
+        }
+
+    def _formula_text_literal(value: str) -> str:
+        return '"' + str(value).replace('"', '""') + '"'
+
+    def _filter_expr(column_label: str, row_number: int) -> str:
+        if not raw_ws or column_label not in raw_headers:
+            return '""'
+        section_col = chr(64 + raw_headers["Section"])
+        value_col = chr(64 + raw_headers[column_label])
+        criteria = (
+            f'IF($C$9="Toutes",LEN(\'{raw_sheet_name}\'!$B$2:$B$999)>0,'
+            f'\'{raw_sheet_name}\'!${section_col}$2:${section_col}$999=$C$9)'
+        )
+        return (
+            f'IFERROR(INDEX(FILTER(\'{raw_sheet_name}\'!${value_col}$2:${value_col}$999,{criteria}),'
+            f'ROWS($A$13:A{row_number})),"")'
+        )
+
+    count_formula = (
+        '=IF($C$9="Toutes",'
+        f'COUNTA(\'{raw_sheet_name}\'!$B$2:$B$999),'
+        f'COUNTIF(\'{raw_sheet_name}\'!$A$2:$A$999,$C$9))'
+    )
 
     write_box("A1:H2", "GUIDE DES KPIs", fill=title, font_color="FFFFFF", size=18, bold=True)
     write_box(
@@ -236,38 +279,58 @@ def render_kpi_dictionary_sheet(ws, styles: dict[str, object]) -> None:
     write_box("D5:F7", "Ordre de lecture conseille : 1) Lecture quotidienne  2) Transitions & churn  3) Nowcast trimestriel.", fill=soft_green, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
     write_box("G5:H7", "Astuce : si vous voulez aller vite, ne lisez que la colonne 'Lecture utile'.", fill=soft_plum, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
 
-    write_box("A9:B9", "KPI", fill=stone, font_color=ink, size=11, bold=True)
-    write_box("C9:E9", "Lecture utile", fill=stone, font_color=ink, size=11, bold=True)
-    write_box("F9:H9", "Methode / calcul", fill=stone, font_color=ink, size=11, bold=True)
+    write_box("A9:B9", "Vue", fill=stone, font_color=ink, size=11, bold=True)
+    write_box("C9", "Toutes", fill=paper, font_color=ink, size=11, bold=True)
+    write_box(
+        "D9:F9",
+        '=IF($C$9="Toutes","Vue complete du dictionnaire",$C$9)',
+        fill=soft_blue,
+        font_color=ink,
+        size=10,
+        bold=True,
+        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+    )
+    write_box(
+        "G9:H9",
+        '="KPI affiches : "&' + count_formula[1:],
+        fill=soft_warm,
+        font_color=muted,
+        size=10,
+        bold=True,
+    )
 
-    current_row = 10
-    current_section = None
+    if available_sections:
+        validation = DataValidation(
+            type="list",
+            formula1=_formula_text_literal(",".join(available_sections)),
+            allow_blank=False,
+        )
+        validation.promptTitle = "Section du dictionnaire"
+        validation.prompt = "Choisissez la section du dictionnaire a afficher."
+        ws.add_data_validation(validation)
+        validation.add(ws["C9"])
 
-    for row in rows:
-        section = row["Section"]
-        if section != current_section:
-            current_section = section
-            section_fill = section_styles.get(section, {"fill": plum})["fill"]
-            write_box(
-                f"A{current_row}:H{current_row}",
-                section,
-                fill=section_fill,
-                font_color="FFFFFF",
-                size=11,
-                bold=True,
-                align=Alignment(horizontal="left", vertical="center", indent=1),
-            )
-            ws.row_dimensions[current_row].height = 22
-            current_row += 1
+    write_box(
+        "A10:H10",
+        '=IF($C$9="Toutes","Vue complete","Section : "&$C$9)',
+        fill=plum,
+        font_color="FFFFFF",
+        size=11,
+        bold=True,
+        align=Alignment(horizontal="left", vertical="center", indent=1),
+    )
+    ws.row_dimensions[10].height = 22
 
-        soft_fill = section_styles.get(section, {"soft": slate})["soft"]
-        kpi = row["KPI"]
-        lecture = row["Lecture utile"]
-        methode = row["Methode / calcul"]
+    write_box("A11:B11", "KPI", fill=stone, font_color=ink, size=11, bold=True)
+    write_box("C11:E11", "Lecture utile", fill=stone, font_color=ink, size=11, bold=True)
+    write_box("F11:H11", "Methode / calcul", fill=stone, font_color=ink, size=11, bold=True)
 
+    max_display_rows = len(rows) + 2
+    for offset in range(max_display_rows):
+        row_number = 12 + offset
         write_box(
-            f"A{current_row}:B{current_row}",
-            kpi,
+            f"A{row_number}:B{row_number}",
+            "=" + _filter_expr("KPI", row_number),
             fill=paper,
             font_color=ink,
             size=11,
@@ -275,32 +338,30 @@ def render_kpi_dictionary_sheet(ws, styles: dict[str, object]) -> None:
             align=Alignment(horizontal="left", vertical="top", wrap_text=True, indent=1),
         )
         write_box(
-            f"C{current_row}:E{current_row}",
-            lecture,
-            fill=soft_fill,
+            f"C{row_number}:E{row_number}",
+            "=" + _filter_expr("Lecture utile", row_number),
+            fill=slate,
             font_color=ink,
             size=10,
             align=Alignment(horizontal="left", vertical="top", wrap_text=True),
         )
         write_box(
-            f"F{current_row}:H{current_row}",
-            methode,
+            f"F{row_number}:H{row_number}",
+            "=" + _filter_expr("Methode / calcul", row_number),
             fill=paper,
             font_color=muted,
             size=10,
             align=Alignment(horizontal="left", vertical="top", wrap_text=True),
         )
+        ws.row_dimensions[row_number].height = 52
 
-        ws.row_dimensions[current_row].height = max(30, estimate_lines(kpi, lecture, methode) * 16)
-        current_row += 1
-
+    footer_row = 12 + max_display_rows + 1
     write_box(
-        f"A{current_row + 1}:H{current_row + 1}",
-        "Le dictionnaire est volontairement pedagogique : il explique d'abord l'usage du KPI, puis sa mecanique. Si un bloc du classeur parait trop dense, c'est ici qu'il faut revenir pour reprendre le fil.",
+        f"A{footer_row}:H{footer_row}",
+        "Le dictionnaire reste pedagogique : il explique d'abord l'usage du KPI, puis sa mecanique. Utilisez le selecteur de vue pour ne consulter que la famille d'indicateurs qui vous interesse.",
         fill=canvas,
         font_color=muted,
         size=10,
         align=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
-    ws.row_dimensions[current_row + 1].height = 34
-
+    ws.row_dimensions[footer_row].height = 34

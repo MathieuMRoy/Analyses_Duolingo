@@ -32,6 +32,7 @@ from .subscription_detection import (
 SUMMARY_SHEET = "📊 Résumé Financier Q1"
 AI_SHEET = "🤖 Analyse Stratégique"
 GLOSSAIRE_SHEET = "📖 Dictionnaire des KPIs"
+GLOSSAIRE_RAW_SHEET = "Dictionnaire des KPIs - Raw"
 TRENDS_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Données Graphique"
 
@@ -894,7 +895,8 @@ def sauvegarder_rapport_excel(
                 quarterly_sheet_df.to_excel(writer, sheet_name=QUARTERLY_RAW_SHEET, index=False)
 
             df_glossaire = build_kpi_dictionary_df()
-            df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
+            pd.DataFrame().to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
+            df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_RAW_SHEET, index=False)
 
         from openpyxl import load_workbook
 
@@ -910,7 +912,7 @@ def sauvegarder_rapport_excel(
         wb = load_workbook(RAPPORT_EXCEL_FILE)
 
         remove_sheets(wb, [*BAD_SHEET_NAMES, AI_SHEET])
-        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET])
+        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, GLOSSAIRE_RAW_SHEET])
 
         style_ctx = build_style_context()
 
@@ -939,8 +941,8 @@ def sauvegarder_rapport_excel(
                 continue
 
             if sheet_name == GLOSSAIRE_SHEET:
-                render_kpi_dictionary_sheet(ws, style_ctx)
-                ws.freeze_panes = "A10"
+                render_kpi_dictionary_sheet(ws, wb, GLOSSAIRE_RAW_SHEET, style_ctx)
+                ws.freeze_panes = "A12"
                 continue
 
             if sheet_name == TRENDS_SHEET:
@@ -966,6 +968,7 @@ def sauvegarder_rapport_excel(
             GLOSSAIRE_SHEET,
             SIGNALS_RAW_SHEET,
             QUARTERLY_RAW_SHEET,
+            GLOSSAIRE_RAW_SHEET,
             CHART_DATA_SHEET,
         ]
         reorder_sheets(wb, ordered_sheet_names)
@@ -973,7 +976,7 @@ def sauvegarder_rapport_excel(
         wb.save(RAPPORT_EXCEL_FILE)
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
         wb = load_workbook(RAPPORT_EXCEL_FILE)
-        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, CHART_DATA_SHEET])
+        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, GLOSSAIRE_RAW_SHEET, CHART_DATA_SHEET])
         ordered_sheet_names = [
             SUMMARY_SHEET,
             SIGNALS_SHEET,
@@ -982,6 +985,7 @@ def sauvegarder_rapport_excel(
             GLOSSAIRE_SHEET,
             SIGNALS_RAW_SHEET,
             QUARTERLY_RAW_SHEET,
+            GLOSSAIRE_RAW_SHEET,
             CHART_DATA_SHEET,
         ]
         reorder_sheets(wb, ordered_sheet_names)

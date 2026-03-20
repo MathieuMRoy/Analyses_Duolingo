@@ -9,7 +9,7 @@ from duolingo_analyzer.config import REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
 from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from duolingo_analyzer.reporting.styles import build_style_context
-from duolingo_analyzer.stats import GLOSSAIRE_SHEET, SUMMARY_SHEET, _normalize_summary_df
+from duolingo_analyzer.stats import GLOSSAIRE_RAW_SHEET, GLOSSAIRE_SHEET, SUMMARY_SHEET, _normalize_summary_df
 from scripts_utilitaires.restyle_report import restyle_report
 
 
@@ -49,7 +49,8 @@ def build_historique() -> None:
 
     with pd.ExcelWriter(HISTO_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
         df_all.to_excel(writer, sheet_name=SUMMARY_SHEET, index=False)
-        df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
+        pd.DataFrame().to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
+        df_glossaire.to_excel(writer, sheet_name=GLOSSAIRE_RAW_SHEET, index=False)
 
     # Appliquer le style pro (convertit aussi les valeurs texte en nombres)
     restyle_report(HISTO_FILE)
@@ -57,7 +58,9 @@ def build_historique() -> None:
 
     wb = load_workbook(HISTO_FILE)
     if GLOSSAIRE_SHEET in wb.sheetnames:
-        render_kpi_dictionary_sheet(wb[GLOSSAIRE_SHEET], build_style_context())
+        render_kpi_dictionary_sheet(wb[GLOSSAIRE_SHEET], wb, GLOSSAIRE_RAW_SHEET, build_style_context())
+    if GLOSSAIRE_RAW_SHEET in wb.sheetnames:
+        wb[GLOSSAIRE_RAW_SHEET].sheet_state = "hidden"
     wb.save(HISTO_FILE)
 
     print(f"OK: {HISTO_FILE}")
