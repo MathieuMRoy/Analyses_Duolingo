@@ -14,20 +14,20 @@ def build_kpi_dictionary_df() -> pd.DataFrame:
         {
             "Section": "Lecture quotidienne",
             "KPI": "Moyenne Streak (Jours)",
-            "Lecture utile": "Longueur moyenne de la serie de jours consecutifs d'utilisation. Mesure la fidelite du panel.",
-            "Methode / calcul": "Moyenne simple du streak observe sur le panel du jour.",
+            "Lecture utile": "Longueur moyenne de la série de jours consécutifs d'utilisation. Mesure la fidélité du panel.",
+            "Methode / calcul": "Moyenne simple du streak observé sur le panel du jour.",
         },
         {
             "Section": "Lecture quotidienne",
             "KPI": "Apprentissage (XP/j)",
-            "Lecture utile": "Gain moyen de points d'experience depuis la veille. Mesure l'effort d'apprentissage quotidien.",
-            "Methode / calcul": "Delta de TotalXP entre hier et aujourd'hui, borne a 0 minimum, puis moyenne sur le panel.",
+            "Lecture utile": "Gain moyen de points d'expérience depuis la veille. Mesure l'effort d'apprentissage quotidien.",
+            "Methode / calcul": "Delta de TotalXP entre hier et aujourd'hui, borné à 0 minimum, puis moyenne sur le panel.",
         },
         {
             "Section": "Lecture quotidienne",
             "KPI": "Taux Abonn. Super",
-            "Lecture utile": "Part observable du panel premium via le signal hasPlus. Tant que MAX n'est pas detecte de facon fiable, une partie de MAX peut rester incluse ici.",
-            "Methode / calcul": "Profils premium observables / profils observes dans le panel.",
+            "Lecture utile": "Part observable du panel premium via le signal hasPlus. Tant que MAX n'est pas détecté de façon fiable, une partie de MAX peut rester incluse ici.",
+            "Methode / calcul": "Profils premium observables / profils observés dans le panel.",
         },
         {
             "Section": "Lecture quotidienne",
@@ -44,34 +44,34 @@ def build_kpi_dictionary_df() -> pd.DataFrame:
         {
             "Section": "Lecture quotidienne",
             "KPI": "Score d'Engagement",
-            "Lecture utile": "Part des profils observes qui restent actifs aujourd'hui.",
-            "Methode / calcul": "Profils avec streak > 0 / panel observe du jour.",
+            "Lecture utile": "Part des profils observés qui restent actifs aujourd'hui.",
+            "Methode / calcul": "Profils avec streak > 0 / panel observé du jour.",
         },
     ]
 
     transition_rows = [
         {
-            "Section": "Transitions & churn",
+            "Section": "Transitions et churn",
             "KPI": "Progression Debutants vers Standard",
-            "Lecture utile": "Part des Debutants actifs hier qui ont progresse vers Standard aujourd'hui sans abandonner.",
-            "Methode / calcul": "Debutants actifs hier devenus Standard aujourd'hui / Debutants actifs hier.",
+            "Lecture utile": "Part des Débutants actifs hier qui ont progressé vers Standard aujourd'hui sans abandonner.",
+            "Methode / calcul": "Débutants actifs hier devenus Standard aujourd'hui / Débutants actifs hier.",
         },
         {
-            "Section": "Transitions & churn",
+            "Section": "Transitions et churn",
             "KPI": "Abandon Debutants",
-            "Lecture utile": "Vrai abandon chez les Debutants, mesure sur la cohorte d'hier et non sur la cohorte du jour.",
-            "Methode / calcul": "Debutants actifs hier devenus inactifs aujourd'hui / Debutants actifs hier.",
+            "Lecture utile": "Vrai abandon chez les Débutants, mesuré sur la cohorte d'hier et non sur la cohorte du jour.",
+            "Methode / calcul": "Débutants actifs hier devenus inactifs aujourd'hui / Débutants actifs hier.",
         },
         {
-            "Section": "Transitions & churn",
+            "Section": "Transitions et churn",
             "KPI": "Abandon Standard",
-            "Lecture utile": "Vrai abandon chez les Standard, mesure sur la cohorte d'hier.",
+            "Lecture utile": "Vrai abandon chez les Standard, mesuré sur la cohorte d'hier.",
             "Methode / calcul": "Standard actifs hier devenus inactifs aujourd'hui / Standard actifs hier.",
         },
         {
-            "Section": "Transitions & churn",
+            "Section": "Transitions et churn",
             "KPI": "Abandon Super-Actifs",
-            "Lecture utile": "Vrai abandon chez les Super-Actifs, mesure sur la cohorte d'hier.",
+            "Lecture utile": "Vrai abandon chez les Super-Actifs, mesuré sur la cohorte d'hier.",
             "Methode / calcul": "Super-Actifs actifs hier devenus inactifs aujourd'hui / Super-Actifs actifs hier.",
         },
     ]
@@ -80,68 +80,68 @@ def build_kpi_dictionary_df() -> pd.DataFrame:
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Confiance (trimestriel)",
-            "Lecture utile": "Niveau de fiabilite du nowcast trimestriel.",
-            "Methode / calcul": "Elevee si couverture moyenne >= 75% et jours observes >= 20 ; Moyenne si couverture >= 45% et jours observes >= 10 ; sinon Faible.",
+            "Lecture utile": "Niveau de fiabilité du nowcast trimestriel.",
+            "Methode / calcul": "Élevée si la couverture moyenne est >= 75% et si les jours observés sont >= 20 ; moyenne si la couverture est >= 45% et si les jours observés sont >= 10 ; sinon faible.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Score trimestre",
-            "Lecture utile": "Score synthetique 0-100 du trimestre, utilise pour lire le biais global du nowcast.",
-            "Methode / calcul": "Score compose a partir de monetisation, engagement, momentum Super, churn, reactivations et retention high-value, puis ajuste par un breadth factor qui penalise les trimestres encore jeunes.",
+            "Lecture utile": "Score synthétique de 0 à 100 du trimestre, utilisé pour lire le biais global du nowcast.",
+            "Methode / calcul": "Score composé à partir de la monétisation, de l'engagement, du momentum Super, du churn, des réactivations et de la rétention high-value, puis ajusté par un breadth factor qui pénalise les trimestres encore jeunes.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Prob. beat revenus",
-            "Lecture utile": "Probabilite implicite de battre les revenus du trimestre. En facade, c'est la lecture principale du nowcast revenus.",
-            "Methode / calcul": "On part d'un score revenus, converti en probabilite implicite. Cette probabilite reste guidance-first : elle se lit face au benchmark management du trimestre tant qu'un consensus complet n'est pas disponible.",
+            "Lecture utile": "Probabilité implicite de battre les revenus du trimestre. En façade, c'est la lecture principale du nowcast revenus.",
+            "Methode / calcul": "On part d'un score revenus, converti en probabilité implicite. Cette probabilité reste guidance-first : elle se lit face au benchmark management du trimestre tant qu'un consensus complet n'est pas disponible.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Prob. beat EBITDA",
-            "Lecture utile": "Probabilite implicite de battre l'EBITDA du trimestre.",
-            "Methode / calcul": "Transformation score -> probabilite appliquee a un score EBITDA fonde sur monetisation, engagement, churn, reactivations et retention high-value.",
+            "Lecture utile": "Probabilité implicite de battre l'EBITDA du trimestre.",
+            "Methode / calcul": "Transformation score -> probabilité appliquée à un score EBITDA fondé sur la monétisation, l'engagement, le churn, les réactivations et la rétention high-value.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Prob. guidance raise",
-            "Lecture utile": "Probabilite implicite d'un relevement de guidance pour le trimestre suivant.",
-            "Methode / calcul": "Transformation score -> probabilite appliquee a un score guidance surtout pilote par monetisation, momentum Super, engagement, churn et reactivations.",
+            "Lecture utile": "Probabilité implicite d'un relèvement de guidance pour le trimestre suivant.",
+            "Methode / calcul": "Transformation score -> probabilité appliquée à un score guidance surtout piloté par la monétisation, le momentum Super, l'engagement, le churn et les réactivations.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Estimation revenus trimestrielle",
-            "Lecture utile": "Estimation interne des revenus du trimestre, affichee en grand dans le nowcast.",
-            "Methode / calcul": "Si une guidance revenus de reference existe, estimation = guidance x (1 + beat implicite). Le beat implicite part du beat historique median et est ajuste par la probabilite revenus, avec bornes de prudence. Sinon, fallback sur le revenu reel du trimestre precedent avec une croissance QoQ implicite bornee.",
+            "Lecture utile": "Estimation interne des revenus du trimestre, affichée en grand dans le nowcast.",
+            "Methode / calcul": "Si une guidance revenus de référence existe, estimation = guidance x (1 + beat implicite). Le beat implicite part du beat historique médian et est ajusté par la probabilité revenus, avec des bornes de prudence. Sinon, fallback sur le revenu réel du trimestre précédent avec une croissance QoQ implicite bornée.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Est. X M$ vs guidance Y M$",
             "Lecture utile": "Lecture directe de l'estimation revenus par rapport au benchmark management du trimestre.",
-            "Methode / calcul": "Le chiffre de gauche est l'estimation du modele. Le chiffre de droite est la guidance revenus du management pour le trimestre suivi, lorsqu'elle est disponible dans l'historique trimestriel.",
+            "Methode / calcul": "Le chiffre de gauche est l'estimation du modèle. Le chiffre de droite est la guidance revenus du management pour le trimestre suivi, lorsqu'elle est disponible dans l'historique trimestriel.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "EBITDA estime",
-            "Lecture utile": "Estimation interne de l'EBITDA ajuste du trimestre.",
-            "Methode / calcul": "EBITDA estime = revenus estimes x marge EBITDA implicite. La marge implicite part de la marge historique mediane et est ajustee par la probabilite EBITDA, avec bornes conservatrices.",
+            "Lecture utile": "Estimation interne de l'EBITDA ajusté du trimestre.",
+            "Methode / calcul": "EBITDA estimé = revenus estimés x marge EBITDA implicite. La marge implicite part de la marge historique médiane et est ajustée par la probabilité EBITDA, avec des bornes conservatrices.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Guide N+1 estime",
             "Lecture utile": "Estimation interne de la guidance revenus du trimestre suivant.",
-            "Methode / calcul": "Guide N+1 estime = revenus estimes x ratio implicite. Le ratio part du ratio historique median guidance suivante / revenus et est ajuste par la probabilite guidance raise.",
+            "Methode / calcul": "Guide N+1 estimé = revenus estimés x ratio implicite. Le ratio part du ratio historique médian guidance suivante / revenus et est ajusté par la probabilité guidance raise.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Historique trimestriel fige",
-            "Lecture utile": "Memoire du nowcast tel qu'il etait a la date du snapshot, sans etre ecrase une fois le trimestre termine.",
-            "Methode / calcul": "Chaque trimestre garde son snapshot final. Quand un nouveau trimestre commence, le precedent reste fige pour permettre le backtest et la comparaison estimate vs reel.",
+            "Lecture utile": "Mémoire du nowcast tel qu'il était à la date du snapshot, sans être écrasé une fois le trimestre terminé.",
+            "Methode / calcul": "Chaque trimestre garde son snapshot final. Quand un nouveau trimestre commence, le précédent reste figé pour permettre le backtest et la comparaison estimate vs réel.",
         },
         {
             "Section": "Nowcast trimestriel",
             "KPI": "Cadre du modele",
-            "Lecture utile": "Bloc qui explique la reference utilisee et le niveau de maturite du modele trimestriel.",
-            "Methode / calcul": "Resume du statut du snapshot, de la reference guidance revenus, du niveau de supervision disponible et de la prochaine etape de calibration.",
+            "Lecture utile": "Bloc qui explique la référence utilisée et le niveau de maturité du modèle trimestriel.",
+            "Methode / calcul": "Résumé du statut du snapshot, de la référence guidance revenus, du niveau de supervision disponible et de la prochaine étape de calibration.",
         },
     ]
 
@@ -197,7 +197,7 @@ def render_kpi_dictionary_sheet(
 
     section_styles = {
         "Lecture quotidienne": {"fill": warm_blue, "soft": soft_blue},
-        "Transitions & churn": {"fill": moss, "soft": soft_green},
+        "Transitions et churn": {"fill": moss, "soft": soft_green},
         "Nowcast trimestriel": {"fill": bronze, "soft": soft_warm},
     }
 
@@ -256,7 +256,7 @@ def render_kpi_dictionary_sheet(
         )
         return (
             f'IFERROR(INDEX(FILTER(\'{raw_sheet_name}\'!${value_col}$2:${value_col}$999,{criteria}),'
-            f'ROWS($A$13:A{row_number})),"")'
+            f'ROWS($A$12:A{row_number})),"")'
         )
 
     count_formula = (
@@ -268,22 +268,22 @@ def render_kpi_dictionary_sheet(
     write_box("A1:H2", "GUIDE DES KPIs", fill=title, font_color="FFFFFF", size=18, bold=True)
     write_box(
         "A3:H3",
-        "Cette page sert de mode d'emploi. Lisez d'abord la colonne de gauche pour comprendre le sens du KPI, puis utilisez la methode / calcul seulement si vous voulez verifier le detail.",
+        "Cette page sert de mode d'emploi. Lisez d'abord la colonne de gauche pour comprendre le sens du KPI, puis utilisez la méthode / calcul seulement si vous voulez vérifier le détail.",
         fill=canvas,
         font_color=muted,
         size=10,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("A5:C7", "Commencez par les KPI du Resume Financier Q1 et de Signaux Financiers. Revenez ici seulement quand un indicateur vous pose question.", fill=soft_blue, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
-    write_box("D5:F7", "Ordre de lecture conseille : 1) Lecture quotidienne  2) Transitions & churn  3) Nowcast trimestriel.", fill=soft_green, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
+    write_box("A5:C7", "Commencez par les KPI du Résumé Financier Q1 et de Signaux Financiers. Revenez ici seulement lorsqu'un indicateur vous pose question.", fill=soft_blue, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
+    write_box("D5:F7", "Ordre de lecture conseillé : 1. Lecture quotidienne  2. Transitions et churn  3. Nowcast trimestriel.", fill=soft_green, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
     write_box("G5:H7", "Astuce : si vous voulez aller vite, ne lisez que la colonne 'Lecture utile'.", fill=soft_plum, font_color=ink, size=11, bold=False, align=Alignment(horizontal="left", vertical="top", wrap_text=True))
 
     write_box("A9:B9", "Vue", fill=stone, font_color=ink, size=11, bold=True)
     write_box("C9", "Toutes", fill=paper, font_color=ink, size=11, bold=True)
     write_box(
         "D9:F9",
-        '=IF($C$9="Toutes","Vue complete du dictionnaire",$C$9)',
+        '=IF($C$9="Toutes","Vue complète du dictionnaire",$C$9)',
         fill=soft_blue,
         font_color=ink,
         size=10,
@@ -292,7 +292,7 @@ def render_kpi_dictionary_sheet(
     )
     write_box(
         "G9:H9",
-        '="KPI affiches : "&' + count_formula[1:],
+        '="KPI affichés : "&' + count_formula[1:],
         fill=soft_warm,
         font_color=muted,
         size=10,
@@ -306,13 +306,13 @@ def render_kpi_dictionary_sheet(
             allow_blank=False,
         )
         validation.promptTitle = "Section du dictionnaire"
-        validation.prompt = "Choisissez la section du dictionnaire a afficher."
+        validation.prompt = "Choisissez la section du dictionnaire à afficher."
         ws.add_data_validation(validation)
         validation.add(ws["C9"])
 
     write_box(
         "A10:H10",
-        '=IF($C$9="Toutes","Vue complete","Section : "&$C$9)',
+        '=IF($C$9="Toutes","Vue complète","Section : "&$C$9)',
         fill=plum,
         font_color="FFFFFF",
         size=11,
@@ -358,7 +358,7 @@ def render_kpi_dictionary_sheet(
     footer_row = 12 + max_display_rows + 1
     write_box(
         f"A{footer_row}:H{footer_row}",
-        "Le dictionnaire reste pedagogique : il explique d'abord l'usage du KPI, puis sa mecanique. Utilisez le selecteur de vue pour ne consulter que la famille d'indicateurs qui vous interesse.",
+        "Le dictionnaire reste pédagogique : il explique d'abord l'usage du KPI, puis sa mécanique. Utilisez le sélecteur de vue pour ne consulter que la famille d'indicateurs qui vous intéresse.",
         fill=canvas,
         font_color=muted,
         size=10,
