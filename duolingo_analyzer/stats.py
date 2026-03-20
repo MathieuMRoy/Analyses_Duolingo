@@ -44,10 +44,6 @@ QUARTERLY_RAW_SHEET = "Nowcast Trimestriel - Raw"
 DCF_SHEET = "Valorisation DCF"
 LEGACY_SHEET_NAMES = {
     "📊 Résumé Financier Q1",
-    "🤖 Analyse Stratégique",
-    "📖 Dictionnaire des KPIs",
-    "📈 Tendances Mensuelles",
-    "📊 Données Graphique",
 }
 
 PERCENT_COLUMNS = {
@@ -59,8 +55,6 @@ PERCENT_COLUMNS = {
 BAD_SHEET_NAMES = {
     "ðŸ“Š RÃ©sumÃ© Financier Q1",
     "ðŸ¤– Analyse StratÃ©gique",
-    "ðŸ“– Dictionnaire des KPIs",
-    "ðŸ“ˆ Tendances Mensuelles",
     "ðŸ“Š DonnÃ©es Graphique",
 }
 
