@@ -28,6 +28,7 @@ def render_dcf_valuation_sheet(
         "G": 16,
         "H": 15,
         "I": 15,
+        "J": 3,
     }.items():
         ws.column_dimensions[column_letter].width = width
 
@@ -205,6 +206,28 @@ def render_dcf_valuation_sheet(
         font_color=muted,
         size=10,
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+    )
+
+    # --- Prominent price target callout on the right side ---
+    for col_letter in ("K", "L", "M", "N"):
+        ws.column_dimensions[col_letter].width = 14
+    write_box("K1:N1", "PRIX CIBLE", fill=green, font_color=white, size=13, bold=True)
+    write_box("K2:N2", "PAR ACTION", fill=green, font_color=white, size=13, bold=True)
+    write_box(
+        "K3:N7",
+        '=IFERROR("$ "&TEXT($C$27/$C$20,"0.00"),"N/D")',
+        fill=pale_price,
+        font_color=green,
+        size=36,
+        bold=True,
+    )
+    write_box(
+        "K8:N8",
+        "Valorisation DCF implicite",
+        fill=canvas,
+        font_color=muted,
+        size=9,
+        align=Alignment(horizontal="center", vertical="center"),
     )
 
     for row in [6, 7, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 24, 25, 26, 27]:

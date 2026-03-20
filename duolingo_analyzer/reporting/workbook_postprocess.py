@@ -153,7 +153,10 @@ def apply_standard_table_style(
 
     for col in ws.columns:
         max_length = 0
-        column = col[0].column_letter
+        first_cell = col[0]
+        if not hasattr(first_cell, "column_letter"):
+            continue
+        column = first_cell.column_letter
         for cell in col:
             try:
                 if len(str(cell.value)) > max_length:
