@@ -208,13 +208,12 @@ def render_dcf_valuation_sheet(
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
-    # --- Prominent price target callout on the right side ---
+    # --- Prominent price target callout on the right side (middle) ---
     for col_letter in ("K", "L", "M", "N"):
         ws.column_dimensions[col_letter].width = 14
-    write_box("K1:N1", "PRIX CIBLE", fill=green, font_color=white, size=13, bold=True)
-    write_box("K2:N2", "PAR ACTION", fill=green, font_color=white, size=13, bold=True)
+    write_box("K12:N12", "PRIX CIBLE PAR ACTION", fill=green, font_color=white, size=13, bold=True)
     write_box(
-        "K3:N7",
+        "K13:N19",
         '=IFERROR("$ "&TEXT($C$27/$C$20,"0.00"),"N/D")',
         fill=pale_price,
         font_color=green,
@@ -222,7 +221,7 @@ def render_dcf_valuation_sheet(
         bold=True,
     )
     write_box(
-        "K8:N8",
+        "K20:N20",
         "Valorisation DCF implicite",
         fill=canvas,
         font_color=muted,
