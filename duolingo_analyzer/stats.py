@@ -42,6 +42,13 @@ SIGNALS_RAW_SHEET = "Signaux Financiers - Raw"
 QUARTERLY_SHEET = "Nowcast Trimestriel"
 QUARTERLY_RAW_SHEET = "Nowcast Trimestriel - Raw"
 DCF_SHEET = "Valorisation DCF"
+LEGACY_SHEET_NAMES = {
+    "📊 Résumé Financier Q1",
+    "🤖 Analyse Stratégique",
+    "📖 Dictionnaire des KPIs",
+    "📈 Tendances Mensuelles",
+    "📊 Données Graphique",
+}
 
 PERCENT_COLUMNS = {
     "Taux Abonn. Super",
@@ -916,7 +923,7 @@ def sauvegarder_rapport_excel(
 
         wb = load_workbook(RAPPORT_EXCEL_FILE)
 
-        remove_sheets(wb, [*BAD_SHEET_NAMES, AI_SHEET])
+        remove_sheets(wb, [*BAD_SHEET_NAMES, *LEGACY_SHEET_NAMES, AI_SHEET])
         hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, GLOSSAIRE_RAW_SHEET])
 
         style_ctx = build_style_context()
@@ -1003,6 +1010,7 @@ def sauvegarder_rapport_excel(
         wb.save(RAPPORT_EXCEL_FILE)
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
         wb = load_workbook(RAPPORT_EXCEL_FILE)
+        remove_sheets(wb, [*BAD_SHEET_NAMES, *LEGACY_SHEET_NAMES, AI_SHEET])
         hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, GLOSSAIRE_RAW_SHEET, CHART_DATA_SHEET])
         ordered_sheet_names = [
             SUMMARY_SHEET,

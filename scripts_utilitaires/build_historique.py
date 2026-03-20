@@ -12,6 +12,7 @@ from duolingo_analyzer.reporting.styles import build_style_context
 from duolingo_analyzer.stats import (
     GLOSSAIRE_RAW_SHEET,
     GLOSSAIRE_SHEET,
+    LEGACY_SHEET_NAMES,
     SUMMARY_SHEET,
     _load_summary_sheet,
     _normalize_summary_df,
@@ -62,6 +63,9 @@ def build_historique() -> None:
     refresh_trends_dashboard(HISTO_FILE)
 
     wb = load_workbook(HISTO_FILE)
+    for legacy_sheet_name in LEGACY_SHEET_NAMES:
+        if legacy_sheet_name in wb.sheetnames:
+            wb.remove(wb[legacy_sheet_name])
     if GLOSSAIRE_SHEET in wb.sheetnames:
         render_kpi_dictionary_sheet(wb[GLOSSAIRE_SHEET], wb, GLOSSAIRE_RAW_SHEET, build_style_context())
     if GLOSSAIRE_RAW_SHEET in wb.sheetnames:
