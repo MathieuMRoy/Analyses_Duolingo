@@ -32,8 +32,7 @@ def build_historique() -> None:
 
     latest_report = report_files[-1]
 
-    if not HISTO_FILE.exists():
-        shutil.copyfile(latest_report, HISTO_FILE)
+    shutil.copyfile(latest_report, HISTO_FILE)
 
     frames: list[pd.DataFrame] = []
     for report_path in report_files:

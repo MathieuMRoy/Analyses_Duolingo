@@ -145,7 +145,46 @@ def build_kpi_dictionary_df() -> pd.DataFrame:
         },
     ]
 
-    return pd.DataFrame(daily_rows + transition_rows + quarterly_rows)
+    dcf_rows = [
+        {
+            "Section": "Valorisation DCF",
+            "KPI": "Croissance annuelle (growth)",
+            "Lecture utile": "Hypothese centrale de croissance du free cash flow sur la premiere annee du modele.",
+            "Methode / calcul": "Point de depart base sur la guidance FY ou, a defaut, sur la croissance implicite du nowcast et de l'historique recent.",
+        },
+        {
+            "Section": "Valorisation DCF",
+            "KPI": "Cout du capital (WACC)",
+            "Lecture utile": "Taux d'actualisation applique aux flux futurs.",
+            "Methode / calcul": "Hypothese manuelle editable. Plus le WACC est eleve, plus la valorisation baisse.",
+        },
+        {
+            "Section": "Valorisation DCF",
+            "KPI": "Croissance perpetuelle",
+            "Lecture utile": "Croissance de long terme utilisee dans la valeur terminale.",
+            "Methode / calcul": "Hypothese manuelle editable appliquee a la formule de Gordon sur le flux de l'annee 5.",
+        },
+        {
+            "Section": "Valorisation DCF",
+            "KPI": "Free cash flow de base",
+            "Lecture utile": "Base annuelle de flux a partir de laquelle le modele projette les cinq prochaines annees.",
+            "Methode / calcul": "FCF historique observe ou FCF implicite derive des revenus TTM estimes et de la marge de FCF historique.",
+        },
+        {
+            "Section": "Valorisation DCF",
+            "KPI": "Prix cible DCF",
+            "Lecture utile": "Valeur par action implicite sous les hypotheses actuellement retenues.",
+            "Methode / calcul": "Equity value / actions diluees, apres actualisation des flux projetes, ajout du cash net et calcul de la valeur terminale.",
+        },
+        {
+            "Section": "Valorisation DCF",
+            "KPI": "Sensibilite WACC / terminale",
+            "Lecture utile": "Tableau qui montre comment le prix cible varie quand on change le WACC ou la croissance perpetuelle.",
+            "Methode / calcul": "Recalcul de la valorisation avec trois hypotheses de WACC et trois hypotheses de croissance terminale.",
+        },
+    ]
+
+    return pd.DataFrame(daily_rows + transition_rows + quarterly_rows + dcf_rows)
 
 
 def render_kpi_dictionary_sheet(

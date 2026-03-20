@@ -14,6 +14,7 @@ from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE,
 from .excel_dashboard import refresh_trends_dashboard
 from .financial_signals import build_financial_signal_sheet_df
 from .quarterly_nowcast import build_quarterly_nowcast_raw_df
+from .reporting.sheets.dcf_valuation_sheet import render_dcf_valuation_sheet
 from .reporting.sheets.financial_nowcast_sheet import render_financial_nowcast_sheet
 from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from .reporting.sheets.monthly_trends_sheet import add_monthly_trends_chart, build_monthly_trends_frames
@@ -40,6 +41,7 @@ SIGNALS_SHEET = "Signaux Financiers"
 SIGNALS_RAW_SHEET = "Signaux Financiers - Raw"
 QUARTERLY_SHEET = "Nowcast Trimestriel"
 QUARTERLY_RAW_SHEET = "Nowcast Trimestriel - Raw"
+DCF_SHEET = "Valorisation DCF"
 
 PERCENT_COLUMNS = {
     "Taux Abonn. Super",
@@ -859,6 +861,7 @@ def sauvegarder_rapport_excel(
     ia_report: str = None,
     financial_signals: dict | None = None,
     quarterly_nowcast: dict | None = None,
+    dcf_valuation: dict | None = None,
 ) -> None:
     """
     Exporte les données d'engagement et les statistiques dans un fichier Excel (.xlsx)
@@ -893,6 +896,8 @@ def sauvegarder_rapport_excel(
                 quarterly_sheet_df = build_quarterly_nowcast_raw_df(quarterly_nowcast)
                 pd.DataFrame().to_excel(writer, sheet_name=QUARTERLY_SHEET, index=False)
                 quarterly_sheet_df.to_excel(writer, sheet_name=QUARTERLY_RAW_SHEET, index=False)
+            if dcf_valuation:
+                pd.DataFrame().to_excel(writer, sheet_name=DCF_SHEET, index=False)
 
             df_glossaire = build_kpi_dictionary_df()
             pd.DataFrame().to_excel(writer, sheet_name=GLOSSAIRE_SHEET, index=False)
@@ -940,6 +945,11 @@ def sauvegarder_rapport_excel(
                 ws.freeze_panes = "A5"
                 continue
 
+            if sheet_name == DCF_SHEET and dcf_valuation:
+                render_dcf_valuation_sheet(ws, dcf_valuation, style_ctx)
+                ws.freeze_panes = "A5"
+                continue
+
             if sheet_name == GLOSSAIRE_SHEET:
                 render_kpi_dictionary_sheet(ws, wb, GLOSSAIRE_RAW_SHEET, style_ctx)
                 ws.freeze_panes = "A12"
@@ -973,6 +983,23 @@ def sauvegarder_rapport_excel(
         ]
         reorder_sheets(wb, ordered_sheet_names)
 
+        if DCF_SHEET in wb.sheetnames:
+            reorder_sheets(
+                wb,
+                [
+                    SUMMARY_SHEET,
+                    SIGNALS_SHEET,
+                    QUARTERLY_SHEET,
+                    TRENDS_SHEET,
+                    DCF_SHEET,
+                    GLOSSAIRE_SHEET,
+                    SIGNALS_RAW_SHEET,
+                    QUARTERLY_RAW_SHEET,
+                    GLOSSAIRE_RAW_SHEET,
+                    CHART_DATA_SHEET,
+                ],
+            )
+
         wb.save(RAPPORT_EXCEL_FILE)
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
         wb = load_workbook(RAPPORT_EXCEL_FILE)
@@ -989,6 +1016,22 @@ def sauvegarder_rapport_excel(
             CHART_DATA_SHEET,
         ]
         reorder_sheets(wb, ordered_sheet_names)
+        if DCF_SHEET in wb.sheetnames:
+            reorder_sheets(
+                wb,
+                [
+                    SUMMARY_SHEET,
+                    SIGNALS_SHEET,
+                    QUARTERLY_SHEET,
+                    TRENDS_SHEET,
+                    DCF_SHEET,
+                    GLOSSAIRE_SHEET,
+                    SIGNALS_RAW_SHEET,
+                    QUARTERLY_RAW_SHEET,
+                    GLOSSAIRE_RAW_SHEET,
+                    CHART_DATA_SHEET,
+                ],
+            )
         wb.save(RAPPORT_EXCEL_FILE)
         google_drive_file = _copier_rapport_vers_google_drive(RAPPORT_EXCEL_FILE)
 

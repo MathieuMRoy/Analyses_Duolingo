@@ -12,6 +12,7 @@ from duolingo_analyzer.financial_signals import generate_financial_signal_packag
 from duolingo_analyzer.quarterly_nowcast import generate_quarterly_nowcast_package
 from duolingo_analyzer.scraper import collecter_streaks_quotidiens
 from duolingo_analyzer.stats import calculer_statistiques, sauvegarder_rapport_excel
+from duolingo_analyzer.valuation_dcf import generate_dcf_valuation_package
 
 
 if __name__ == "__main__":
@@ -41,12 +42,14 @@ if __name__ == "__main__":
 
     signaux_financiers = generate_financial_signal_package(statistiques.get("date_jour"))
     nowcast_trimestriel = generate_quarterly_nowcast_package(statistiques.get("date_jour"))
+    valorisation_dcf = generate_dcf_valuation_package(nowcast_trimestriel, statistiques.get("date_jour"))
     rapport_ia = generer_rapport_ia(statistiques, signaux_financiers, nowcast_trimestriel)
     sauvegarder_rapport_excel(
         statistiques,
         rapport_ia,
         signaux_financiers,
         nowcast_trimestriel,
+        valorisation_dcf,
     )
 
     print("\n" + "=" * 60)
