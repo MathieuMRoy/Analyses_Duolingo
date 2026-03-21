@@ -8,5 +8,14 @@ __pycache__/
 .pytest_cache/
 
 daily_streaks_log.csv
+financial_docs/*.pdf
+rapports_donnees/*.csv
+rapports_donnees/*.json
 rapports_donnees/*.xlsx
 rapports_donnees/~$*.xlsx
+tmp_luis_dom.html
+*.xml
+
+/rapports_donnees/_xlsx_debug/_rels
+rapports_donnees/_xlsx_debug/xl/_rels/workbook.xml.rels
+rapports_donnees/rapport_historique_debug.zip
