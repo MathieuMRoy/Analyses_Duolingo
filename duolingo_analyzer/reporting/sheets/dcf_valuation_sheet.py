@@ -129,9 +129,12 @@ def render_dcf_valuation_sheet(
     write_label_value(14, "Cash flow operationnel", anchors.get("operating_cash_flow_musd"), fmt='0.0 "M$"')
     capex_plus = (anchors.get("capitalized_software_musd") or 0) + (anchors.get("capex_musd") or 0)
     write_label_value(15, "CapEx + logiciels", capex_plus, fmt='0.0 "M$"')
-    write_label_value(16, "Free cash flow historique", anchors.get("free_cash_flow_historical_musd"), fmt='0.0 "M$"')
-    write_label_value(17, "Stock-based comp. (SBC)", anchors.get("stock_based_compensation_musd"), fmt='0.0 "M$"')
-    write_label_value(18, "Free cash flow de base", anchors.get("free_cash_flow_base_less_sbc_musd"), fmt='0.0 "M$"')
+    fcf_base_val = anchors.get("free_cash_flow_base_musd") or 0.0
+    sbc_val = anchors.get("stock_based_compensation_musd") or 0.0
+
+    write_label_value(16, "Free cash flow de base", fcf_base_val, fmt='0.0 "M$"')
+    write_label_value(17, "Stock-based comp. (SBC)", sbc_val, fmt='0.0 "M$"')
+    write_label_value(18, f"FCF - SBC ({fcf_base_val:.1f} - {sbc_val:.1f})", anchors.get("free_cash_flow_base_less_sbc_musd"), fmt='0.0 "M$"')
     write_label_value(19, "Tresorerie + placements", anchors.get("cash_and_investments_musd"), fmt='0.0 "M$"')
     write_label_value(20, "Dette totale", anchors.get("total_debt_musd"), fmt='0.0 "M$"')
     write_label_value(21, "Actions diluees (M)", anchors.get("diluted_shares_m"), fmt='0.000')
