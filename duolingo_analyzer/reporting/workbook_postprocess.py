@@ -69,11 +69,15 @@ def apply_standard_table_style(
 
             is_delta = ("Δ" in str(header_value)) or ("delta" in header_key) or ("evol" in header_key)
             is_percent = ("%" in str(header_value)) or any(
-                key in header_key for key in ["taux", "attrition", "abandon", "score", "pénétration", "penetration"]
+                key in header_key for key in ["taux", "attrition", "score", "pénétration", "penetration"]
             )
             is_xp = "xp" in header_key
             is_streak = ("série" in header_key) or ("serie" in header_key) or ("streak" in header_key)
-            is_panel = any(key in header_key for key in ["panel", "total", "profils", "actifs", "reactiv"])
+            is_panel = any(key in header_key for key in ["panel", "total", "profils", "actifs", "reactiv", "abandons"])
+
+            # Integer count columns override percentage detection
+            if is_panel:
+                is_percent = False
 
             if isinstance(cell.value, numbers.Number) and cell.value != cell.value:
                 cell.value = None
@@ -125,7 +129,7 @@ def apply_standard_table_style(
             if is_zebra:
                 cell.fill = zebra_fill
 
-            if sheet_name == summary_sheet_name and any(key in header_key for key in ["attrition", "abandon", "churn"]):
+            if sheet_name == summary_sheet_name and any(key in header_key for key in ["taux", "attrition", "churn"]) and is_percent:
                 try:
                     metric_value = float(cell.value)
                     if metric_value <= 0.02:
