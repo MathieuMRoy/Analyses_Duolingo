@@ -130,10 +130,11 @@ def render_dcf_valuation_sheet(
     capex_plus = (anchors.get("capitalized_software_musd") or 0) + (anchors.get("capex_musd") or 0)
     write_label_value(15, "CapEx + logiciels", capex_plus, fmt='0.0 "M$"')
     write_label_value(16, "Free cash flow historique", anchors.get("free_cash_flow_historical_musd"), fmt='0.0 "M$"')
-    write_label_value(17, "Free cash flow de base", anchors.get("free_cash_flow_base_musd"), fmt='0.0 "M$"')
-    write_label_value(18, "Tresorerie + placements", anchors.get("cash_and_investments_musd"), fmt='0.0 "M$"')
-    write_label_value(19, "Dette totale", anchors.get("total_debt_musd"), fmt='0.0 "M$"')
-    write_label_value(20, "Actions diluees (M)", anchors.get("diluted_shares_m"), fmt='0.000')
+    write_label_value(17, "Stock-based comp. (SBC)", anchors.get("stock_based_compensation_musd"), fmt='0.0 "M$"')
+    write_label_value(18, "Free cash flow de base", anchors.get("free_cash_flow_base_less_sbc_musd"), fmt='0.0 "M$"')
+    write_label_value(19, "Tresorerie + placements", anchors.get("cash_and_investments_musd"), fmt='0.0 "M$"')
+    write_label_value(20, "Dette totale", anchors.get("total_debt_musd"), fmt='0.0 "M$"')
+    write_label_value(21, "Actions diluees (M)", anchors.get("diluted_shares_m"), fmt='0.000')
 
     headers = [
         ("E12", "Annee"),
@@ -163,17 +164,17 @@ def render_dcf_valuation_sheet(
         write_box(f"H{row}", f"=(1+$C$7)^{offset}", fill=paper, font_color=muted, size=10, bold=False, number_format="0.000x")
         write_box(f"I{row}", f"=IFERROR(G{row}/H{row},NA())", fill=paper, font_color=ink, size=10, bold=False, number_format='0.0 "M$"')
 
-    write_box("A22:C22", "VALORISATION", fill=steel, font_color=white, size=11, bold=True)
-    write_box("E22:I22", "SENSIBILITE WACC / TERMINALE", fill=gold, font_color=white, size=11, bold=True)
+    write_box("A23:C23", "VALORISATION", fill=steel, font_color=white, size=11, bold=True)
+    write_box("E23:I23", "SENSIBILITE WACC / TERMINALE", fill=gold, font_color=white, size=11, bold=True)
 
-    write_label_value(23, "Somme des flux actualises", "=SUM(I13:I17)", fmt='0.0 "M$"')
-    write_label_value(24, "Valeur terminale actualisee", "=IF($C$7<=$C$8,NA(),G17*(1+$C$8)/($C$7-$C$8)/H17)", fmt='0.0 "M$"')
-    write_label_value(25, "Enterprise value (EV)", "=IFERROR($C$23+$C$24,NA())", fmt='0.0 "M$"')
-    write_label_value(26, "Cash net", "=IFERROR($C$18-$C$19,NA())", fmt='0.0 "M$"')
-    write_label_value(27, "Equity value", "=IFERROR($C$25+$C$26,NA())", fmt='0.0 "M$"')
+    write_label_value(28, "Somme des flux actualises", "=SUM(I13:I17)", fmt='0.0 "M$"')
+    write_label_value(28, "Valeur terminale actualisee", "=IF($C$7<=$C$8,NA(),G17*(1+$C$8)/($C$7-$C$8)/H17)", fmt='0.0 "M$"')
+    write_label_value(28, "Enterprise value (EV)", "=IFERROR($C$23+$C$24,NA())", fmt='0.0 "M$"')
+    write_label_value(28, "Cash net", "=IFERROR($C$18-$C$19,NA())", fmt='0.0 "M$"')
+    write_label_value(28, "Equity value", "=IFERROR($C$25+$C$26,NA())", fmt='0.0 "M$"')
 
-    write_box("A29:C31", '=IFERROR("$ "&TEXT($C$27/$C$20,"0.00"),"N/D")', fill=pale_price, font_color=green, size=22, bold=True)
-    write_box("A28:C28", "PRIX CIBLE PAR ACTION", fill=green, font_color=white, size=11, bold=True)
+    write_box("A30:C32", '=IFERROR("$ "&TEXT($C$27/$C$20,"0.00"),"N/D")', fill=pale_price, font_color=green, size=22, bold=True)
+    write_box("A29:C29", "PRIX CIBLE PAR ACTION", fill=green, font_color=white, size=11, bold=True)
 
     terminal_headers = [0.02, assumptions.get("terminal_growth") or 0.03, 0.04]
     wacc_headers = [
@@ -181,26 +182,26 @@ def render_dcf_valuation_sheet(
         assumptions.get("wacc") or 0.1058,
         (assumptions.get("wacc") or 0.1058) + 0.01,
     ]
-    write_box("F23", "", fill=pale_matrix)
+    write_box("F24", "", fill=pale_matrix)
     for idx, terminal in enumerate(terminal_headers, start=7):
-        write_box(f"{chr(64+idx)}23", terminal, fill=pale_matrix, font_color=ink, size=10, bold=True, number_format="0.0%")
-    for offset, wacc in enumerate(wacc_headers, start=24):
+        write_box(f"{chr(64+idx)}24", terminal, fill=pale_matrix, font_color=ink, size=10, bold=True, number_format="0.0%")
+    for offset, wacc in enumerate(wacc_headers, start=25):
         write_box(f"F{offset}", wacc, fill=pale_matrix, font_color=ink, size=10, bold=True, number_format="0.0%")
         for col_idx, _ in enumerate(terminal_headers, start=7):
-            terminal_cell = f"{chr(64+col_idx)}23"
+            terminal_cell = f"{chr(64+col_idx)}24"
             value_formula = (
                 f'=IF($F{offset}<={terminal_cell},NA(),'
                 f'($C$23 + (G17*(1+{terminal_cell})/($F{offset}-{terminal_cell})/((1+$F{offset})^5)) + $C$26)/$C$20)'
             )
             write_box(f"{chr(64+col_idx)}{offset}", value_formula, fill=paper, font_color=ink, size=10, bold=False, number_format='$ 0.00')
 
-    write_box("A33:I33", "NOTES DE MODELE", fill=navy, font_color=white, size=11, bold=True)
+    write_box("A34:I34", "NOTES DE MODELE", fill=navy, font_color=white, size=11, bold=True)
     joined_notes = " | ".join(str(note) for note in notes if str(note).strip())
     if metadata.get("source_file"):
         source_note = f"Source filing : {metadata.get('source_file')}"
         joined_notes = f"{joined_notes} | {source_note}" if joined_notes else source_note
     write_box(
-        "A34:I36",
+        "A35:I37",
         joined_notes or "Valorisation basee sur le nowcast trimestriel, l'historique des resultats et les derniers fondamentaux disponibles.",
         fill=pale_note,
         font_color=muted,
@@ -229,9 +230,9 @@ def render_dcf_valuation_sheet(
         align=Alignment(horizontal="center", vertical="center"),
     )
 
-    for row in [6, 7, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 24, 25, 26, 27]:
+    for row in [6, 7, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 26, 27, 28]:
         ws.row_dimensions[row].height = 24
-    for row in [29, 30, 31]:
+    for row in [30, 31, 32]:
         ws.row_dimensions[row].height = 24
-    for row in [34, 35, 36]:
+    for row in [35, 36, 37]:
         ws.row_dimensions[row].height = 28

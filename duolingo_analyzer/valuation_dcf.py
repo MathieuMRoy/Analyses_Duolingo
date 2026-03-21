@@ -37,6 +37,7 @@ DEFAULT_LATEST_FINANCIAL_CONTEXT = {
     "net_income_musd": 414.1,
     "adjusted_ebitda_musd": None,
     "diluted_shares_m": 48.315,
+    "stock_based_compensation_musd": 194.8,
     "total_debt_musd": 0.0,
 }
 
@@ -193,6 +194,10 @@ def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
             text,
             r"Net income \(GAAP\).*?\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
         )
+        stock_based_compensation_kusd, _ = _extract_two_matches(
+            text,
+            r"(?:Stock|Share)-based compensation expense\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
+        )
         diluted_eps = _extract_first_match(
             text,
             r"Net income per share attributable.*?diluted\s*\$?\s*(\d+(?:\.\d+)?)",
@@ -225,6 +230,9 @@ def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
             else None,
             "adjusted_ebitda_musd": _round_or_none((adjusted_ebitda_kusd or 0) / 1000.0, 1)
             if adjusted_ebitda_kusd is not None
+            else None,
+            "stock_based_compensation_musd": _round_or_none((stock_based_compensation_kusd or 0) / 1000.0, 1)
+            if stock_based_compensation_kusd is not None
             else None,
             "diluted_shares_m": _round_or_none(diluted_shares_m, 3),
             "total_debt_musd": 0.0,
@@ -335,6 +343,7 @@ def build_dcf_valuation_package(
     diluted_shares_m = _safe_float(balance_context.get("diluted_shares_m"))
     cash_musd = _safe_float(balance_context.get("cash_musd")) or 0.0
     short_term_investments_musd = _safe_float(balance_context.get("short_term_investments_musd")) or 0.0
+    stock_based_compensation_musd = _safe_float(balance_context.get("stock_based_compensation_musd")) or 0.0
     total_debt_musd = _safe_float(balance_context.get("total_debt_musd")) or 0.0
 
     net_cash_musd = cash_musd + short_term_investments_musd - total_debt_musd
@@ -355,6 +364,10 @@ def build_dcf_valuation_package(
         free_cash_flow_base_musd = dcf_revenue_base_musd * fcf_margin_base
     elif historical_fcf_musd is not None:
         free_cash_flow_base_musd = historical_fcf_musd
+
+    free_cash_flow_base_less_sbc_musd = None
+    if free_cash_flow_base_musd is not None:
+        free_cash_flow_base_less_sbc_musd = max(0.0, free_cash_flow_base_musd - stock_based_compensation_musd)
 
     fy_growth_assumption = None
     if fy_guidance_revenue_musd and previous_year_revenue and previous_year_revenue > 0:
@@ -392,7 +405,9 @@ def build_dcf_valuation_package(
             "capitalized_software_musd": _round_or_none(capitalized_software_musd, 1),
             "capex_musd": _round_or_none(capex_musd, 1),
             "free_cash_flow_historical_musd": _round_or_none(historical_fcf_musd, 1),
+            "stock_based_compensation_musd": _round_or_none(stock_based_compensation_musd, 1),
             "free_cash_flow_base_musd": _round_or_none(free_cash_flow_base_musd, 1),
+            "free_cash_flow_base_less_sbc_musd": _round_or_none(free_cash_flow_base_less_sbc_musd, 1),
             "fcf_margin_base": _round_or_none(fcf_margin_base, 4),
             "cash_musd": _round_or_none(cash_musd, 1),
             "short_term_investments_musd": _round_or_none(short_term_investments_musd, 1),
