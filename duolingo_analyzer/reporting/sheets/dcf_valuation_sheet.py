@@ -167,13 +167,13 @@ def render_dcf_valuation_sheet(
     write_box("A23:C23", "VALORISATION", fill=steel, font_color=white, size=11, bold=True)
     write_box("E23:I23", "SENSIBILITE WACC / TERMINALE", fill=gold, font_color=white, size=11, bold=True)
 
-    write_label_value(28, "Somme des flux actualises", "=SUM(I13:I17)", fmt='0.0 "M$"')
-    write_label_value(28, "Valeur terminale actualisee", "=IF($C$7<=$C$8,NA(),G17*(1+$C$8)/($C$7-$C$8)/H17)", fmt='0.0 "M$"')
-    write_label_value(28, "Enterprise value (EV)", "=IFERROR($C$23+$C$24,NA())", fmt='0.0 "M$"')
-    write_label_value(28, "Cash net", "=IFERROR($C$18-$C$19,NA())", fmt='0.0 "M$"')
-    write_label_value(28, "Equity value", "=IFERROR($C$25+$C$26,NA())", fmt='0.0 "M$"')
+    write_label_value(24, "Somme des flux actualises", "=SUM(I13:I17)", fmt='0.0 "M$"')
+    write_label_value(25, "Valeur terminale actualisee", "=IF($C$7<=$C$8,NA(),G17*(1+$C$8)/($C$7-$C$8)/H17)", fmt='0.0 "M$"')
+    write_label_value(26, "Enterprise value (EV)", "=IFERROR($C$24+$C$25,NA())", fmt='0.0 "M$"')
+    write_label_value(27, "Cash net", "=IFERROR($C$19-$C$20,NA())", fmt='0.0 "M$"')
+    write_label_value(28, "Equity value", "=IFERROR($C$26+$C$27,NA())", fmt='0.0 "M$"')
 
-    write_box("A30:C32", '=IFERROR("$ "&TEXT($C$27/$C$20,"0.00"),"N/D")', fill=pale_price, font_color=green, size=22, bold=True)
+    write_box("A30:C32", '=IFERROR("$ "&TEXT($C$28/$C$21,"0.00"),"N/D")', fill=pale_price, font_color=green, size=22, bold=True)
     write_box("A29:C29", "PRIX CIBLE PAR ACTION", fill=green, font_color=white, size=11, bold=True)
 
     terminal_headers = [0.02, assumptions.get("terminal_growth") or 0.03, 0.04]
@@ -191,7 +191,7 @@ def render_dcf_valuation_sheet(
             terminal_cell = f"{chr(64+col_idx)}24"
             value_formula = (
                 f'=IF($F{offset}<={terminal_cell},NA(),'
-                f'($C$23 + (G17*(1+{terminal_cell})/($F{offset}-{terminal_cell})/((1+$F{offset})^5)) + $C$26)/$C$20)'
+                f'($C$24 + (G17*(1+{terminal_cell})/($F{offset}-{terminal_cell})/((1+$F{offset})^5)) + $C$27)/$C$21)'
             )
             write_box(f"{chr(64+col_idx)}{offset}", value_formula, fill=paper, font_color=ink, size=10, bold=False, number_format='$ 0.00')
 
@@ -215,7 +215,7 @@ def render_dcf_valuation_sheet(
     write_box("K12:N12", "PRIX CIBLE PAR ACTION", fill=green, font_color=white, size=13, bold=True)
     write_box(
         "K13:N19",
-        '=IFERROR("$ "&TEXT($C$27/$C$20,"0.00"),"N/D")',
+        '=IFERROR("$ "&TEXT($C$28/$C$21,"0.00"),"N/D")',
         fill=pale_price,
         font_color=green,
         size=36,
