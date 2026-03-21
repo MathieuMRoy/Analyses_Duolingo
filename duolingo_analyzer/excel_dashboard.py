@@ -13,6 +13,18 @@ from openpyxl.chart.layout import Layout, ManualLayout
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .config import DAILY_LOG_FILE
+from .utils import (
+    delta_font_color,
+    format_integer,
+    format_percent,
+    format_points,
+    format_streak,
+    format_xp,
+    format_xp_delta,
+    parse_bool_fraction,
+    parse_float,
+    weekly_insight_text,
+)
 
 SUMMARY_SHEET = "Suivi Quotidien"
 TREND_SHEET = "📈 Tendances Mensuelles"
@@ -29,45 +41,6 @@ PERCENT_RATIO_COLUMNS = {
     "Taux d'abandon moyen",
     "Score d'eng. moyen",
 }
-
-
-def _parse_float(value: object) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, numbers.Number):
-        return float(value)
-    if isinstance(value, str):
-        raw = value.strip()
-        if not raw or raw.upper() in {"N/A", "NA"}:
-            return None
-        cleaned = raw.replace(",", ".")
-        cleaned = cleaned.replace("XP", "").replace("xp", "")
-        cleaned = cleaned.replace("%", "")
-        cleaned = cleaned.replace("−", "-")
-        cleaned = re.sub(r"[^0-9\.\-\+]", "", cleaned)
-        if cleaned in {"", "+", "-"}:
-            return None
-        try:
-            return float(cleaned)
-        except ValueError:
-            return None
-    return None
-
-
-def _parse_bool_fraction(value: object) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return 1.0 if value else 0.0
-    if isinstance(value, numbers.Number):
-        return 1.0 if float(value) != 0 else 0.0
-    if isinstance(value, str):
-        raw = value.strip().lower()
-        if raw in {"true", "vrai", "1", "yes", "oui"}:
-            return 1.0
-        if raw in {"false", "faux", "0", "no", "non", ""}:
-            return 0.0
-    return None
 
 
 def _load_sheet(report_path: Path, sheet_name: str) -> pd.DataFrame:
@@ -109,7 +82,7 @@ def _first_existing_column(df: pd.DataFrame, names: list[str]) -> str | None:
 
 
 def _normalize_percent_series(series: pd.Series) -> pd.Series:
-    parsed = series.apply(_parse_float)
+    parsed = series.apply(parse_float)
     return parsed.apply(
         lambda x: (x / 100) if isinstance(x, numbers.Number) and abs(x) > 1 else x
     )
@@ -159,7 +132,7 @@ def _prepare_summary_metrics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
             if target in PERCENT_RATIO_COLUMNS:
                 normalized[target] = _normalize_percent_series(df[source])
             else:
-                normalized[target] = df[source].apply(_parse_float)
+                normalized[target] = df[source].apply(parse_float)
         else:
             normalized[target] = None
 
@@ -258,7 +231,7 @@ def _prepare_snapshot_df(chart_df: pd.DataFrame) -> pd.DataFrame:
 
     if {"Segment", "Taux (%)"}.issubset(chart_df.columns):
         df = chart_df[["Segment", "Taux (%)"]].copy()
-        df["Taux"] = df["Taux (%)"].apply(_parse_float)
+        df["Taux"] = df["Taux (%)"].apply(parse_float)
         df = df.dropna(subset=["Segment", "Taux"])
         if not df.empty:
             return df[["Segment", "Taux"]].reset_index(drop=True)
@@ -282,7 +255,7 @@ def _prepare_snapshot_df(chart_df: pd.DataFrame) -> pd.DataFrame:
 
     rows: list[dict[str, float | str]] = []
     for label, column in mapping:
-        value = _parse_float(latest.get(column))
+        value = parse_float(latest.get(column))
         if value is not None:
             rows.append({"Segment": label, "Taux": value})
 
@@ -309,7 +282,7 @@ def _prepare_snapshot_df_from_log() -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Segment", "Taux"])
 
-    df["HasPlusValue"] = df["HasPlus"].apply(_parse_bool_fraction)
+    df["HasPlusValue"] = df["HasPlus"].apply(parse_bool_fraction)
     df = df.dropna(subset=["HasPlusValue"])
     if df.empty:
         return pd.DataFrame(columns=["Segment", "Taux"])
@@ -351,7 +324,7 @@ def _prepare_daily_engagement_snapshot_from_log() -> dict[str, float | str | Non
     df = df[~df["Username"].astype(str).str.contains("Aggregated", na=False)].copy()
     df = df[df["Cohort"] != "Global"]
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    df["Streak"] = df["Streak"].apply(_parse_float)
+    df["Streak"] = df["Streak"].apply(parse_float)
     df = df.dropna(subset=["Date", "Streak"])
     df = df.sort_values(["Date", "Username"]).drop_duplicates(subset=["Date", "Username"], keep="last")
     if df.empty:
@@ -437,26 +410,26 @@ def _prepare_daily_engagement_snapshot(summary_df: pd.DataFrame) -> dict[str, fl
         return {}
 
     latest = normalized.iloc[-1]
-    panel_total = _parse_float(latest.get("Panel Total"))
-    engagement_score = _parse_float(latest.get("Score d'Engagement"))
+    panel_total = parse_float(latest.get("Panel Total"))
+    engagement_score = parse_float(latest.get("Score d'Engagement"))
     active_users = None
     if panel_total is not None and engagement_score is not None:
         active_users = int(round(panel_total * engagement_score))
 
-    abandon_global = _parse_float(latest.get("Taux d'Abandon Global"))
+    abandon_global = parse_float(latest.get("Taux d'Abandon Global"))
 
     return {
         "date_label": latest["Date"].strftime("%Y-%m-%d"),
         "panel_total": panel_total,
         "active_users": active_users,
         "engagement_score": engagement_score,
-        "reactivated_users": _parse_float(latest.get("Reactivations vs Veille")),
-        "avg_streak": _parse_float(latest.get("Serie Moyenne (Jours)")),
+        "reactivated_users": parse_float(latest.get("Reactivations vs Veille")),
+        "avg_streak": parse_float(latest.get("Serie Moyenne (Jours)")),
         "abandon_global": abandon_global,
         "retention_rate": None if abandon_global is None else 1 - abandon_global,
-        "abandon_debutants": _parse_float(latest.get("Abandon Debutants")),
-        "abandon_standard": _parse_float(latest.get("Abandon Standard")),
-        "abandon_super_actifs": _parse_float(latest.get("Abandon Super-Actifs")),
+        "abandon_debutants": parse_float(latest.get("Abandon Debutants")),
+        "abandon_standard": parse_float(latest.get("Abandon Standard")),
+        "abandon_super_actifs": parse_float(latest.get("Abandon Super-Actifs")),
     }
 
 
@@ -513,83 +486,6 @@ def _write_section_header(ws, cell_range: str, title: str, fill_color: str, whit
     cell.fill = PatternFill("solid", start_color=fill_color, end_color=fill_color)
     cell.font = Font(name="Calibri", size=11, bold=True, color=white)
     cell.alignment = Alignment(horizontal="center", vertical="center")
-
-
-def _format_points(value: float | None) -> str:
-    if value is None or pd.isna(value):
-        return "N/A"
-    return f"{float(value) * 100:+.1f} pts"
-
-
-def _format_percent(value: float | None) -> str:
-    if value is None or pd.isna(value):
-        return "N/A"
-    return f"{float(value) * 100:.1f}%"
-
-
-def _format_integer(value: float | None) -> str:
-    if value is None or pd.isna(value):
-        return "N/A"
-    return f"{int(round(float(value))):,}".replace(",", " ")
-
-
-def _format_streak(value: float | None) -> str:
-    if value is None or pd.isna(value):
-        return "N/A"
-    return f"{float(value):.1f} j"
-
-
-def _format_xp(value: float | None) -> str:
-    if value is None or pd.isna(value):
-        return "N/A"
-    return f"{int(round(float(value))):,} XP".replace(",", " ")
-
-
-def _format_xp_delta(value: float | None) -> str:
-    if value is None or pd.isna(value):
-        return "N/A"
-    rounded = int(round(float(value)))
-    sign = "+" if rounded > 0 else ""
-    return f"{sign}{rounded:,} XP".replace(",", " ")
-
-
-def _delta_font_color(value: float | None, positive_is_good: bool = True) -> str:
-    if value is None or pd.isna(value):
-        return "666666"
-    numeric = float(value)
-    if numeric == 0:
-        return "666666"
-    if positive_is_good:
-        return "008000" if numeric > 0 else "C00000"
-    return "008000" if numeric < 0 else "C00000"
-
-
-def _weekly_insight_text(latest_week: pd.Series | None) -> str:
-    if latest_week is None:
-        return "La lecture Week over Week apparaitra ici des qu'une semaine de resume sera disponible."
-
-    delta_xp = latest_week.get("Delta XP vs S-1")
-    delta_conv = latest_week.get("Delta Conv. vs S-1")
-    delta_abandon = latest_week.get("Delta Abandon vs S-1")
-    delta_score = latest_week.get("Delta Score vs S-1")
-
-    if all(pd.isna(value) for value in [delta_xp, delta_conv, delta_abandon, delta_score]):
-        return (
-            "La semaine en cours est bien calculee, mais il faut encore une semaine precedente "
-            "pour afficher une comparaison Week over Week."
-        )
-
-    parts: list[str] = []
-    if not pd.isna(delta_xp):
-        parts.append(f"XP moyen {_format_xp_delta(delta_xp)} vs semaine precedente")
-    if not pd.isna(delta_conv):
-        parts.append(f"conversion Super {_format_points(delta_conv)}")
-    if not pd.isna(delta_abandon):
-        parts.append(f"taux d'abandon {_format_points(delta_abandon)}")
-    if not pd.isna(delta_score):
-        parts.append(f"score d'engagement {_format_points(delta_score)}")
-
-    return "Cette semaine : " + " | ".join(parts) + "."
 
 
 def refresh_trends_dashboard(report_path: Path) -> None:
@@ -676,7 +572,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         "D6:F6",
         "D7:F8",
         "Panel observe",
-        _format_integer(daily_snapshot.get("panel_total")),
+        format_integer(daily_snapshot.get("panel_total")),
         DUO_BLUE,
         SOFT_BLUE,
         WHITE,
@@ -686,7 +582,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         "G6:I6",
         "G7:I8",
         "Utilisateurs actifs",
-        _format_integer(daily_snapshot.get("active_users")),
+        format_integer(daily_snapshot.get("active_users")),
         "FF8A34",
         SOFT_ORANGE,
         WHITE,
@@ -696,7 +592,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
         "J6:N6",
         "J7:N8",
         "Score d'engagement",
-        _format_percent(daily_snapshot.get("engagement_score")),
+        format_percent(daily_snapshot.get("engagement_score")),
         DUO_GREEN,
         SOFT_GREEN,
         WHITE,
@@ -704,10 +600,10 @@ def refresh_trends_dashboard(report_path: Path) -> None:
     trend_ws.merge_cells("A9:N9")
     daily_line = trend_ws["A9"]
     daily_line.value = (
-        f"Taux d'abandon global : {_format_percent(daily_snapshot.get('abandon_global'))}"
-        f"   |   Reactivations vs veille : {_format_integer(daily_snapshot.get('reactivated_users'))}"
-        f"   |   Retention vs hier : {_format_percent(daily_snapshot.get('retention_rate'))}"
-        f"   |   Serie moyenne : {_format_streak(daily_snapshot.get('avg_streak'))}"
+        f"Taux d'abandon global : {format_percent(daily_snapshot.get('abandon_global'))}"
+        f"   |   Reactivations vs veille : {format_integer(daily_snapshot.get('reactivated_users'))}"
+        f"   |   Retention vs hier : {format_percent(daily_snapshot.get('retention_rate'))}"
+        f"   |   Serie moyenne : {format_streak(daily_snapshot.get('avg_streak'))}"
     )
     daily_line.font = Font(name="Calibri", size=10, bold=True, color="4A4A4A")
     daily_line.alignment = Alignment(horizontal="center", vertical="center")
@@ -716,9 +612,9 @@ def refresh_trends_dashboard(report_path: Path) -> None:
     cohort_line = trend_ws["A10"]
     cohort_line.value = (
         "Abandon par cohorte : "
-        f"Debutants {_format_percent(daily_snapshot.get('abandon_debutants'))}"
-        f"   |   Standard {_format_percent(daily_snapshot.get('abandon_standard'))}"
-        f"   |   Super-Actifs {_format_percent(daily_snapshot.get('abandon_super_actifs'))}"
+        f"Debutants {format_percent(daily_snapshot.get('abandon_debutants'))}"
+        f"   |   Standard {format_percent(daily_snapshot.get('abandon_standard'))}"
+        f"   |   Super-Actifs {format_percent(daily_snapshot.get('abandon_super_actifs'))}"
     )
     cohort_line.font = Font(name="Calibri", size=9, italic=True, color="666666")
     cohort_line.alignment = Alignment(horizontal="center", vertical="center")
@@ -852,7 +748,7 @@ def refresh_trends_dashboard(report_path: Path) -> None:
                 )
                 cell.font = Font(name="Calibri", size=10, bold=(col == "J"), color="333333")
                 if col == "L" and gap is not None:
-                    cell.font = Font(name="Calibri", size=10, bold=True, color=_delta_font_color(gap))
+                    cell.font = Font(name="Calibri", size=10, bold=True, color=delta_font_color(gap))
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 cell.border = _build_border()
     else:
@@ -895,24 +791,24 @@ def refresh_trends_dashboard(report_path: Path) -> None:
     delta_score = latest_week["Delta Score vs S-1"] if latest_week is not None else None
 
     _write_card(trend_ws, "A33:C33", "A34:C35", "Semaine", str(latest_week_label), NAVY, SOFT_GREY, WHITE)
-    _write_card(trend_ws, "D33:F33", "D34:F35", "XP moyen / jour", _format_xp(latest_week_xp), DUO_BLUE, SOFT_BLUE, WHITE)
-    _write_card(trend_ws, "G33:I33", "G34:I35", "Conv. Super moy.", _format_percent(latest_week_conv), DUO_GREEN, SOFT_GREEN, WHITE)
-    _write_card(trend_ws, "J33:L33", "J34:L35", "Taux d'abandon moy.", _format_percent(latest_week_abandon), "FF6B6B", SOFT_RED, WHITE)
-    _write_card(trend_ws, "M33:N33", "M34:N35", "Panel moy.", _format_integer(latest_week_panel), NAVY, SOFT_GREY, WHITE)
+    _write_card(trend_ws, "D33:F33", "D34:F35", "XP moyen / jour", format_xp(latest_week_xp), DUO_BLUE, SOFT_BLUE, WHITE)
+    _write_card(trend_ws, "G33:I33", "G34:I35", "Conv. Super moy.", format_percent(latest_week_conv), DUO_GREEN, SOFT_GREEN, WHITE)
+    _write_card(trend_ws, "J33:L33", "J34:L35", "Taux d'abandon moy.", format_percent(latest_week_abandon), "FF6B6B", SOFT_RED, WHITE)
+    _write_card(trend_ws, "M33:N33", "M34:N35", "Panel moy.", format_integer(latest_week_panel), NAVY, SOFT_GREY, WHITE)
 
-    _write_card(trend_ws, "A37:C37", "A38:C39", "Delta XP vs S-1", _format_xp_delta(delta_xp), "FF8A34", SOFT_ORANGE, WHITE)
-    trend_ws["A38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_xp))
-    _write_card(trend_ws, "D37:F37", "D38:F39", "Delta Conv. vs S-1", _format_points(delta_conv), DUO_BLUE, SOFT_BLUE, WHITE)
-    trend_ws["D38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_conv))
-    _write_card(trend_ws, "G37:I37", "G38:I39", "Delta Abandon vs S-1", _format_points(delta_abandon), "FF6B6B", SOFT_RED, WHITE)
-    trend_ws["G38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_abandon, positive_is_good=False))
-    _write_card(trend_ws, "J37:L37", "J38:L39", "Delta Score vs S-1", _format_points(delta_score), DUO_GREEN, SOFT_GREEN, WHITE)
-    trend_ws["J38"].font = Font(name="Calibri", size=16, bold=True, color=_delta_font_color(delta_score))
+    _write_card(trend_ws, "A37:C37", "A38:C39", "Delta XP vs S-1", format_xp_delta(delta_xp), "FF8A34", SOFT_ORANGE, WHITE)
+    trend_ws["A38"].font = Font(name="Calibri", size=16, bold=True, color=delta_font_color(delta_xp))
+    _write_card(trend_ws, "D37:F37", "D38:F39", "Delta Conv. vs S-1", format_points(delta_conv), DUO_BLUE, SOFT_BLUE, WHITE)
+    trend_ws["D38"].font = Font(name="Calibri", size=16, bold=True, color=delta_font_color(delta_conv))
+    _write_card(trend_ws, "G37:I37", "G38:I39", "Delta Abandon vs S-1", format_points(delta_abandon), "FF6B6B", SOFT_RED, WHITE)
+    trend_ws["G38"].font = Font(name="Calibri", size=16, bold=True, color=delta_font_color(delta_abandon, positive_is_good=False))
+    _write_card(trend_ws, "J37:L37", "J38:L39", "Delta Score vs S-1", format_points(delta_score), DUO_GREEN, SOFT_GREEN, WHITE)
+    trend_ws["J38"].font = Font(name="Calibri", size=16, bold=True, color=delta_font_color(delta_score))
     _write_card(trend_ws, "M37:N37", "M38:N39", "Semaines visibles", str(len(weekly_df)) if not weekly_df.empty else "0", NAVY, SOFT_GREY, WHITE)
 
     trend_ws.merge_cells("A41:N41")
     wow_insight = trend_ws["A41"]
-    wow_insight.value = _weekly_insight_text(latest_week)
+    wow_insight.value = weekly_insight_text(latest_week)
     wow_insight.fill = PatternFill("solid", start_color=SOFT_GREY, end_color=SOFT_GREY)
     wow_insight.font = Font(name="Calibri", size=10, bold=True, color="444444")
     wow_insight.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -952,11 +848,11 @@ def refresh_trends_dashboard(report_path: Path) -> None:
             values = [
                 row[0],
                 str(int(row[1])) if not pd.isna(row[1]) else "N/A",
-                _format_xp(row[2]),
-                _format_percent(row[4]),
-                _format_percent(row[6]),
-                _format_percent(row[8]),
-                _format_integer(row[10]),
+                format_xp(row[2]),
+                format_percent(row[4]),
+                format_percent(row[6]),
+                format_percent(row[8]),
+                format_integer(row[10]),
             ]
             is_latest_week = idx == latest_week_index
             base_fill = SOFT_BLUE if is_latest_week else (WHITE if offset % 2 else SOFT_GREY)

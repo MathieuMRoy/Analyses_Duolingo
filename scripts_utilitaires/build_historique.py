@@ -9,14 +9,14 @@ from duolingo_analyzer.config import RAPPORT_EXCEL_FILE, REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
 from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from duolingo_analyzer.reporting.styles import build_style_context
-from duolingo_analyzer.stats import (
+from duolingo_analyzer.columns import (
     GLOSSAIRE_RAW_SHEET,
     GLOSSAIRE_SHEET,
     LEGACY_SHEET_NAMES,
     SUMMARY_SHEET,
-    _load_summary_sheet,
-    _normalize_summary_df,
 )
+from duolingo_analyzer.report_builder import _load_summary_sheet
+from duolingo_analyzer.stats import _normalize_summary_df
 from scripts_utilitaires.restyle_report import restyle_report
 
 

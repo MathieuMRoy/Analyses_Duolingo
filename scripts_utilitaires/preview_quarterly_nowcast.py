@@ -12,17 +12,18 @@ from openpyxl import load_workbook
 
 from duolingo_analyzer.financial_signals import generate_financial_signal_package
 from duolingo_analyzer.quarterly_nowcast import generate_quarterly_nowcast_package
+from duolingo_analyzer import config as config_module
+from duolingo_analyzer import report_builder as report_builder_module
 from duolingo_analyzer import stats as stats_module
 
 
 def main() -> None:
-    preview_path = stats_module.REPORT_DIR / "rapport_preview_nowcast_trimestriel.xlsx"
+    preview_path = config_module.REPORT_DIR / "rapport_preview_nowcast_trimestriel.xlsx"
 
-    original_report_path = stats_module.RAPPORT_EXCEL_FILE
-    original_drive_dir = stats_module.GOOGLE_DRIVE_REPORT_DIR
-
-    stats_module.RAPPORT_EXCEL_FILE = preview_path
-    stats_module.GOOGLE_DRIVE_REPORT_DIR = None
+    original_report_path = config_module.RAPPORT_EXCEL_FILE
+    original_drive_dir = config_module.GOOGLE_DRIVE_REPORT_DIR
+    config_module.RAPPORT_EXCEL_FILE = preview_path
+    config_module.GOOGLE_DRIVE_REPORT_DIR = None
 
     try:
         statistiques = stats_module.calculer_statistiques()
@@ -35,15 +36,21 @@ def main() -> None:
 
         # The quarterly sheet already carries its own explanatory text. We use
         # an empty IA payload here so local validation stays deterministic.
-        stats_module.sauvegarder_rapport_excel(
-            statistiques,
-            ia_report="",
-            financial_signals=signaux_financiers,
+        report_builder_module.sauvegarder_rapport_excel(
+            stats=statistiques,
+            ia_report=None,
+            financial_signals=None,
             quarterly_nowcast=nowcast_trimestriel,
+            dcf_valuation=None,
         )
-    finally:
-        stats_module.RAPPORT_EXCEL_FILE = original_report_path
-        stats_module.GOOGLE_DRIVE_REPORT_DIR = original_drive_dir
+        config_module.RAPPORT_EXCEL_FILE = original_report_path
+        config_module.GOOGLE_DRIVE_REPORT_DIR = original_drive_dir
+    except Exception:
+        # Ensure config is reset even if an error occurs during report generation
+        config_module.RAPPORT_EXCEL_FILE = original_report_path
+        config_module.GOOGLE_DRIVE_REPORT_DIR = original_drive_dir
+        raise
+
 
     wb = load_workbook(preview_path)
     print("SHEETS:")
