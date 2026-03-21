@@ -65,6 +65,7 @@ SUMMARY_COLUMNS = [
     "Apprentissage (XP/j)",
     "Taux Abonn. Super",
     "Taux d'Abandon Global",
+    "Abandons vs Veille",
     "Reactivations vs Veille",
     "Score d'Engagement",
     "Panel Total",
@@ -84,6 +85,7 @@ SUMMARY_COLUMN_ALIASES = {
     "Churn Global": "Taux d'Abandon Global",
     "Taux d'Abandon Global": "Taux d'Abandon Global",
     "Taux d'Attrition Global": "Taux d'Abandon Global",
+    "Abandons vs Veille": "Abandons vs Veille",
     "Reactivations vs Veille": "Reactivations vs Veille",
     "Score Santé Global": "Score d'Engagement",
     "Score d'Engagement": "Score d'Engagement",
@@ -259,6 +261,7 @@ def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
 
         delta_xp_moyen = 0.0
         taux_churn = 0.0
+        abandons_veille = 0
         reactivations_veille = 0
         if not df_jour.empty and not df_hier.empty:
             merged = df_hier.merge(
@@ -275,6 +278,7 @@ def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
             tombes_a_zero = merged[(merged["Streak_hier"] > 0) & (merged["Streak_jour"] == 0)]
             actifs_hier = int(len(df_hier[df_hier["Streak"] > 0]))
             taux_churn = ((len(tombes_a_zero) / actifs_hier) * 100) if actifs_hier > 0 else 0.0
+            abandons_veille = int(len(tombes_a_zero))
             reactivations_veille = int(((merged["Streak_hier"] == 0) & (merged["Streak_jour"] > 0)).sum())
 
         utilisateurs_actifs = int(len(df_jour[df_jour["Streak"] > 0]))
@@ -288,6 +292,7 @@ def _build_summary_history_from_log(df: pd.DataFrame) -> pd.DataFrame | None:
                 "Apprentissage (XP/j)": round(delta_xp_moyen, 0),
                 "Taux Abonn. Super": round(taux_super / 100, 6) if isinstance(taux_super, numbers.Number) else None,
                 "Taux d'Abandon Global": round(taux_churn / 100, 6),
+                "Abandons vs Veille": abandons_veille,
                 "Reactivations vs Veille": reactivations_veille,
                 "Score d'Engagement": round(score_engagement / 100, 6),
                 "Panel Total": int(len(df_jour)),

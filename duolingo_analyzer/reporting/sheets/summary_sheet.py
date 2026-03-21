@@ -34,6 +34,7 @@ def build_summary_today_df(stats: dict) -> pd.DataFrame:
                 if isinstance(stats.get("taux_conversion_plus"), numbers.Number)
                 else None,
                 "Taux d'Abandon Global": round(stats.get("taux_churn", 0) / 100, 6),
+                "Abandons vs Veille": stats.get("streaks_tombes_zero", 0),
                 "Reactivations vs Veille": stats.get("reactivations_veille", 0),
                 "Score d'Engagement": round(stats.get("score_sante_jour", 0) / 100, 6),
                 "Panel Total": stats.get("nb_profils_jour"),
