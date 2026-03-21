@@ -37,7 +37,7 @@ DEFAULT_LATEST_FINANCIAL_CONTEXT = {
     "net_income_musd": 414.1,
     "adjusted_ebitda_musd": None,
     "diluted_shares_m": 48.315,
-    "stock_based_compensation_musd": 194.8,
+    "stock_based_compensation_musd": 137.4,
     "total_debt_musd": 0.0,
 }
 
