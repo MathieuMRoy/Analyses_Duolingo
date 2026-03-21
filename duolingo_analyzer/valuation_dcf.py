@@ -20,11 +20,7 @@ except Exception:  # pragma: no cover - fallback if dependency is missing
 QUARTERLY_LABELS_FILE = BASE_DIR / "financial_docs" / "quarterly_labels_template.csv"
 DCF_VALUATION_JSON_FILE = REPORT_DIR / "dcf_valuation_latest.json"
 
-ANNUAL_REPORT_CANDIDATES = [
-    "0001628280-26-012494.pdf",  # FY25 10-K
-    "0001628280-25-049743.pdf",  # Q3 2025 10-Q
-    "0001562088-25-000168.pdf",  # Q2 2025 10-Q
-]
+
 
 DEFAULT_LATEST_FINANCIAL_CONTEXT = {
     "source_file": "fallback_fy25_context",
@@ -147,8 +143,9 @@ def _extract_two_matches(text: str, pattern: str) -> tuple[float | None, float |
 
 def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
     docs_dir = BASE_DIR / "financial_docs"
-    for candidate in ANNUAL_REPORT_CANDIDATES:
-        path = docs_dir / candidate
+    candidates = sorted(docs_dir.glob("*.pdf"), key=lambda p: p.name, reverse=True) if docs_dir.exists() else []
+    
+    for path in candidates:
         text = _extract_pdf_text(path)
         if not text:
             continue
@@ -212,7 +209,7 @@ def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
             diluted_shares_m = net_income_kusd / diluted_eps / 1000.0
 
         return {
-            "source_file": candidate,
+            "source_file": path.name,
             "cash_musd": _round_or_none(cash_musd, 1),
             "short_term_investments_musd": _round_or_none(short_term_investments_musd, 1),
             "operating_cash_flow_musd": _round_or_none((operating_cash_flow_kusd or 0) / 1000.0, 1)
