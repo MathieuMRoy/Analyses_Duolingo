@@ -129,7 +129,7 @@ def apply_standard_table_style(
             if is_zebra:
                 cell.fill = zebra_fill
 
-            if sheet_name == summary_sheet_name and any(key in header_key for key in ["taux", "attrition", "churn"]) and is_percent:
+            if sheet_name == summary_sheet_name and any(key in header_key for key in ["abandon", "attrition", "churn"]) and is_percent:
                 try:
                     metric_value = float(cell.value)
                     if metric_value <= 0.02:
