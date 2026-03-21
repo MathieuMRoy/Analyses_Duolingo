@@ -157,7 +157,7 @@ def render_dcf_valuation_sheet(
         write_box(f"E{row}", f"Annee {offset}", fill=paper, font_color=ink, size=10, bold=True)
         write_box(f"F{row}", growth_formulas[row], fill=paper, font_color=ink, size=10, bold=True, number_format="0.0%")
         if row == 13:
-            fcf_formula = "=IFERROR($C$17*(1+F13),NA())"
+            fcf_formula = "=IFERROR($C$18*(1+F13),NA())"
         else:
             fcf_formula = f"=IFERROR(G{row-1}*(1+F{row}),NA())"
         write_box(f"G{row}", fcf_formula, fill=paper, font_color=ink, size=10, bold=False, number_format='0.0 "M$"')
