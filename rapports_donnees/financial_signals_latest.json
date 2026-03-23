@@ -1,0 +1,71 @@
+{
+  "metadata": {
+    "phase": "phase_1_feature_and_proxy_layer",
+    "as_of_date": "2026-03-16",
+    "observed_days": 2,
+    "source": "daily_streaks_log.csv + target_users.csv"
+  },
+  "panel": {
+    "target_panel_size": 28064,
+    "observed_users_today": 9981,
+    "coverage_ratio": 0.355651
+  },
+  "business_signals": {
+    "active_users": 9946,
+    "active_rate": 0.996493,
+    "avg_streak": 578.52,
+    "xp_delta_mean": 23.01,
+    "reactivated_users": 0,
+    "reactivation_rate": 0.0,
+    "churned_users": 0,
+    "churn_rate": 0.0,
+    "super_rate": 0.389039,
+    "max_rate": null,
+    "high_value_active_rate": 0.998747,
+    "high_value_retention_rate": 1.0,
+    "debutants_to_standard_rate": null,
+    "debutants_abandon_rate": null,
+    "standard_abandon_rate": 0.0,
+    "super_actifs_abandon_rate": 0.0,
+    "free_to_super": 0,
+    "free_to_max": null,
+    "super_to_max": null,
+    "super_to_free": 2,
+    "max_to_free": null
+  },
+  "financial_proxy_signals": {
+    "engagement_quality_index": 99.82,
+    "engagement_quality_trend": 0.134174,
+    "premium_momentum_14d": -0.05299,
+    "max_momentum_14d": null,
+    "churn_trend_14d": null,
+    "reactivation_trend_7d": null,
+    "high_value_retention_trend": null,
+    "premium_net_adds_proxy_7d": -0.014493,
+    "max_net_adds_proxy_7d": null,
+    "subscription_momentum_proxy": -0.033741,
+    "monetization_momentum_index": 17.5,
+    "growth_acceleration_7d": null,
+    "signal_bias": "unfavorable",
+    "confidence_level": "low",
+    "main_drivers": [
+      "Le signal est encore jeune; il faut plus d'historique pour faire ressortir un driver dominant."
+    ],
+    "main_risks": [
+      "Le taux d'abonnement Super ralentit sur la fenetre recente."
+    ],
+    "revenue_beat_probability": null,
+    "ebitda_beat_probability": null,
+    "guidance_raise_probability": null
+  },
+  "model_readiness": {
+    "supervised_probabilities_ready": false,
+    "next_step": "Add quarterly labels and consensus history before training beat/miss models."
+  },
+  "assumptions": [
+    "Panel behavior is a sample-based proxy, not Duolingo's full user base.",
+    "Max is only reported when it is explicitly observable or manually overridden; otherwise it stays unknown.",
+    "Super currently reflects the observable premium bucket via HasPlus, and may still include some Max users until Max detection is reliable.",
+    "Current outputs are explainable proxy signals, not supervised beat/miss probabilities yet."
+  ]
+}

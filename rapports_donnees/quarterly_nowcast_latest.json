@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "phase": "phase_2_quarterly_nowcast_v1",
+    "as_of_date": "2026-03-21",
+    "current_quarter": "2026Q1",
+    "default_selected_quarter": "2026Q1",
+    "available_quarters": [
+      "2026Q1"
+    ],
+    "history_days_available": 2,
+    "history_quarters_available": 1,
+    "source": "financial_signals_history.csv + quarterly_labels_template.csv"
+  },
+  "current_quarter": {
+    "quarter": "2026Q1",
+    "quarter_start": "2026-03-15",
+    "quarter_end_observed": "2026-03-16",
+    "earnings_release_date": null,
+    "observed_days": 2,
+    "avg_coverage_ratio": 0.180284,
+    "latest_coverage_ratio": 0.355651,
+    "avg_monetization_momentum_index": 33.75,
+    "avg_engagement_quality_index": 96.56,
+    "avg_premium_momentum_14d": -0.05299,
+    "avg_max_momentum_14d": null,
+    "avg_churn_trend_14d": null,
+    "avg_reactivation_trend_7d": null,
+    "avg_high_value_retention_trend": null,
+    "avg_active_rate": 0.929406,
+    "avg_super_rate": 0.415534,
+    "avg_max_rate": null,
+    "avg_xp_delta_mean": 23.01,
+    "quarter_signal_score": 28.52,
+    "revenue_score_proxy": 19.94,
+    "ebitda_score_proxy": 34.26,
+    "guidance_score_proxy": 25.73,
+    "quarter_signal_bias": "Defavorable",
+    "confidence_level": "Faible",
+    "revenue_beat_probability_proxy": 0.3918,
+    "ebitda_beat_probability_proxy": 0.4433,
+    "guidance_raise_probability_proxy": 0.4126,
+    "revenue_guidance_reference_musd": 288.5,
+    "revenue_guidance_reference_quarter": "2025Q4",
+    "estimated_revenue_musd": 294.11,
+    "estimated_ebitda_musd": 79.03,
+    "estimated_next_q_guidance_musd": 308.26,
+    "main_drivers": [
+      "Le trimestre reste encore trop jeune pour faire émerger un moteur dominant."
+    ],
+    "main_risks": [
+      "Le momentum de monétisation demeure sous la zone neutre.",
+      "La dynamique Super sur 14 jours ralentit.",
+      "La couverture du panel limite encore la fiabilité du signal."
+    ],
+    "model_summary_text": "",
+    "snapshot_as_of_date": null,
+    "snapshot_locked": false,
+    "snapshot_status_label": "En cours"
+  },
+  "model_output": {
+    "quarter_signal_bias": "Defavorable",
+    "confidence_level": "Faible",
+    "quarter_signal_score": 28.52,
+    "revenue_guidance_reference_musd": 288.5,
+    "revenue_guidance_reference_quarter": "2025Q4",
+    "revenue_beat_probability": 0.3918,
+    "revenue_beat_probability_proxy": 0.3918,
+    "revenue_beat_guidance_probability": 0.3918,
+    "estimated_revenue_musd": 294.11,
+    "ebitda_beat_probability_proxy": 0.4433,
+    "ebitda_beat_probability": 0.4433,
+    "estimated_ebitda_musd": 79.03,
+    "guidance_raise_probability_proxy": 0.4126,
+    "guidance_raise_probability": 0.4126,
+    "estimated_next_q_guidance_musd": 308.26,
+    "main_drivers": [
+      "Le trimestre reste encore trop jeune pour faire émerger un moteur dominant."
+    ],
+    "main_risks": [
+      "Le momentum de monétisation demeure sous la zone neutre.",
+      "La dynamique Super sur 14 jours ralentit.",
+      "La couverture du panel limite encore la fiabilité du signal."
+    ]
+  },
+  "labels_readiness": {
+    "actual_labels_ready": 8,
+    "guidance_benchmarks_ready": 7,
+    "supervised_ready": true,
+    "next_step": "Completer d'abord l'historique de guidance management, puis ajouter ensuite le consensus analystes comme couche de comparaison marche."
+  },
+  "historical_snapshots": [
+    {
+      "quarter": "2026Q1",
+      "quarter_start": "2026-03-15",
+      "quarter_end_observed": "2026-03-16",
+      "earnings_release_date": null,
+      "observed_days": 2,
+      "avg_coverage_ratio": 0.180284,
+      "latest_coverage_ratio": 0.355651,
+      "avg_monetization_momentum_index": 33.75,
+      "avg_engagement_quality_index": 96.56,
+      "avg_premium_momentum_14d": -0.05299,
+      "avg_max_momentum_14d": null,
+      "avg_churn_trend_14d": null,
+      "avg_reactivation_trend_7d": null,
+      "avg_high_value_retention_trend": null,
+      "avg_active_rate": 0.929406,
+      "avg_super_rate": 0.415534,
+      "avg_max_rate": null,
+      "avg_xp_delta_mean": 23.01,
+      "quarter_signal_score": 28.52,
+      "revenue_score_proxy": 19.94,
+      "ebitda_score_proxy": 34.26,
+      "guidance_score_proxy": 25.73,
+      "quarter_signal_bias": "Defavorable",
+      "confidence_level": "Faible",
+      "revenue_beat_probability_proxy": 0.3918,
+      "ebitda_beat_probability_proxy": 0.4433,
+      "guidance_raise_probability_proxy": 0.4126,
+      "revenue_guidance_reference_musd": 288.5,
+      "revenue_guidance_reference_quarter": "2025Q4",
+      "estimated_revenue_musd": 294.11,
+      "estimated_ebitda_musd": 79.03,
+      "estimated_next_q_guidance_musd": 308.26,
+      "main_drivers": [
+        "Le trimestre reste encore trop jeune pour faire émerger un moteur dominant."
+      ],
+      "main_risks": [
+        "Le momentum de monétisation demeure sous la zone neutre.",
+        "La dynamique Super sur 14 jours ralentit.",
+        "La couverture du panel limite encore la fiabilité du signal."
+      ],
+      "model_summary_text": "",
+      "snapshot_as_of_date": null,
+      "snapshot_locked": false,
+      "snapshot_status_label": "En cours"
+    }
+  ],
+  "assumptions": [
+    "Les probabilites trimestrielles actuelles sont des probabilites implicites explicables, benchmarkees sur le guidance management quand il est disponible.",
+    "Le score combine momentum de monetisation, qualite d'engagement, retention et reactivations.",
+    "La confiance depend de la couverture moyenne du panel et du nombre de jours observes dans le trimestre."
+  ]
+}

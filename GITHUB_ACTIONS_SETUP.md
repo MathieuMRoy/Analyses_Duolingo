@@ -1,4 +1,4 @@
-﻿# GitHub Actions - Rapport Duolingo Quotidien
+# GitHub Actions - Rapport Duolingo Quotidien
 
 Cette configuration permet de lancer l'analyse chaque jour a 11h, heure de Toronto, meme si ton ordinateur est eteint.
 
@@ -43,6 +43,6 @@ Le workflow se declenche deux fois par jour, a 15:00 UTC et 16:00 UTC, puis ne l
 ## Points importants
 
 - Le depot doit etre prive.
-- `target_users.csv` doit etre present dans le depot.
+- Le depot peut maintenant être rendu public en toute sécurité. Le fichier `target_users.csv` est téléchargé dynamiquement depuis Google Drive.
 - Si `GOOGLE_API_KEY` est absent, le workflow peut quand meme tourner, mais le rapport IA retombera sur le mode local/placeholder.
 

@@ -19,3 +19,12 @@ tmp_luis_dom.html
 /rapports_donnees/_xlsx_debug/_rels
 rapports_donnees/_xlsx_debug/xl/_rels/workbook.xml.rels
 rapports_donnees/rapport_historique_debug.zip
+
+# --- Outils de sync et d'état
+explored_nodes.json
+target_users.csv
+
+# --- Credentials potentiels accidentels
+*.json
+!rapports_donnees/*.json
+credentials/

@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "as_of_date": null,
+    "quarter": "2026Q1",
+    "source": "quarterly_nowcast + quarterly_labels_template + latest annual filing",
+    "source_file": "0001628280-26-012494.pdf"
+  },
+  "assumptions": {
+    "growth_rate": 0.1652,
+    "wacc": 0.1058,
+    "terminal_growth": 0.03
+  },
+  "anchors": {
+    "estimated_revenue_current_quarter_musd": null,
+    "estimated_ebitda_current_quarter_musd": null,
+    "next_q_guidance_reference_musd": 288.5,
+    "fy_guidance_revenue_musd": 1209.0,
+    "revenue_ttm_estimated_musd": 1037.6,
+    "ebitda_ttm_estimated_musd": 305.8,
+    "operating_cash_flow_musd": 387.8,
+    "capitalized_software_musd": 9.3,
+    "capex_musd": 18.1,
+    "free_cash_flow_historical_musd": 0.1,
+    "stock_based_compensation_musd": 137.4,
+    "free_cash_flow_base_musd": 0.1,
+    "free_cash_flow_base_less_sbc_musd": 0.0,
+    "fcf_margin_base": 0.0001,
+    "cash_musd": 1036.4,
+    "short_term_investments_musd": 104.1,
+    "cash_and_investments_musd": 1140.5,
+    "total_debt_musd": 0.0,
+    "net_cash_musd": 1140.5,
+    "diluted_shares_m": 48.316,
+    "previous_year_revenue_musd": 1037.6,
+    "previous_year_adjusted_ebitda_musd": 305.8,
+    "implied_fy_growth_rate": 0.1652
+  },
+  "sensitivity": {
+    "wacc_values": [
+      0.0958,
+      0.1058,
+      0.1158
+    ],
+    "terminal_values": [
+      0.02,
+      0.03,
+      0.04
+    ]
+  },
+  "assumption_notes": [
+    "La base de revenus s'appuie sur les trois derniers trimestres publies et le trimestre en cours estime par le nowcast.",
+    "Le FCF de base applique la marge de free cash flow observee sur le dernier exercice annualise disponible.",
+    "La croissance annuelle part de la guidance FY du management quand elle est disponible, avec des bornes de prudence.",
+    "La valorisation reste une lecture sous hypotheses, a completer par la sensibilite WACC / croissance terminale."
+  ]
+}
