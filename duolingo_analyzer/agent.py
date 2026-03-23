@@ -83,11 +83,11 @@ def _build_financial_signal_prompt(
         "Tu ne dois pas inventer de probabilités supervisées si elles sont absentes. "
         "Tu restes prudent, tu relies comportement utilisateur et implications business, "
         f"et tu produis uniquement les sections suivantes dans cet ordre exact : {sections_instruction}. "
-        "Style professionnel, profond et orienté investisseur expert. N'hésite pas à développer tes analyses. "
-        "[RESUME] : Fournis un résumé analytique pointu. "
-        "[TENDANCES] : Détaille les tendances de fond que tu observes. "
-        "[ATTENTION] : Soulève les risques clés avec profondeur et nuance. "
-        "[CONSEILS] : Donne des conseils stratégiques actionnables et argumentés. "
+        "Style professionnel et orienté investisseur expert. Ton analyse doit être profonde mais synthétique. "
+        "[RESUME] : Résume l'état actuel (2 à 3 phrases max). "
+        "[TENDANCES] : Puces analytiques sur ce qui s'améliore (3 puces max, courtes et denses). "
+        "[ATTENTION] : Puces analytiques sur ce qui se dégrade (3 puces max, courtes et denses). "
+        "[CONSEILS] : Conclusion stratégique (2 à 3 phrases max). "
         "Utilise un français fluide, avec accents corrects, phrases complètes et vocabulaire naturel. "
         "Évite de répéter les chiffres bruts inutilement. "
     )
@@ -157,8 +157,8 @@ def _build_financial_signal_prompt(
         f"Labels readiness: actuals={quarterly_readiness.get('actual_labels_ready', 'N/D')}, "
         f"guidance_benchmarks={quarterly_readiness.get('guidance_benchmarks_ready', 'N/D')}, "
         f"supervised_ready={quarterly_readiness.get('supervised_ready', 'N/D')}\n\n"
-        "Génère une lecture détaillée, réfléchie et orientée investisseur de haut vol. "
-        "Tu as carte blanche sur la longueur pour fournir une vraie valeur ajoutée basée sur l'interprétation des données cachées. "
+        "Génère une lecture réfléchie et orientée investisseur de haut vol. "
+        "Attention : tes réponses sont insérées dans des cases Excel de taille fixe. Garde un haut niveau d'analyse mais reste concis (maximum 3-4 lignes par section). "
         "Privilégie l'analyse des dynamiques plutôt que la répétition brute des chiffres isolés."
     )
 
