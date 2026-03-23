@@ -48,7 +48,7 @@ def _executer_agent_adk(system_prompt: str, user_prompt: str) -> str | None:
             contents=user_prompt,
             config=genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                temperature=0.35,
+                temperature=0.7,
             ),
         )
         return response.text
@@ -83,18 +83,18 @@ def _build_financial_signal_prompt(
         "Tu ne dois pas inventer de probabilités supervisées si elles sont absentes. "
         "Tu restes prudent, tu relies comportement utilisateur et implications business, "
         f"et tu produis uniquement les sections suivantes dans cet ordre exact : {sections_instruction}. "
-        "Style très court, professionnel et orienté investisseur. "
-        "[RESUME] : 2 phrases maximum. "
-        "[TENDANCES] : 2 puces maximum. "
-        "[ATTENTION] : 2 puces maximum. "
-        "[CONSEILS] : 2 phrases maximum. "
+        "Style professionnel, profond et orienté investisseur expert. N'hésite pas à développer tes analyses. "
+        "[RESUME] : Fournis un résumé analytique pointu. "
+        "[TENDANCES] : Détaille les tendances de fond que tu observes. "
+        "[ATTENTION] : Soulève les risques clés avec profondeur et nuance. "
+        "[CONSEILS] : Donne des conseils stratégiques actionnables et argumentés. "
         "Utilise un français fluide, avec accents corrects, phrases complètes et vocabulaire naturel. "
         "Évite de répéter les chiffres bruts inutilement. "
     )
     if quarterly_mode:
         system_prompt += (
-            "[MODELE] : 2 phrases maximum. "
-            "Phrase 1 : explique brièvement que le modèle trimestriel agrège des signaux de monétisation, d'engagement, "
+            "[MODELE] : Expose clairement les prédictions du modèle. "
+            "Explique en détail que le modèle trimestriel agrège des signaux de monétisation, d'engagement, "
             "de rétention, de churn, de réactivations et de couverture du panel. "
             "Phrase 2 : explique clairement que la probabilité de beat revenus mesure la probabilité implicite de battre les revenus du trimestre, "
             "avec une référence interne ancrée sur le guidance management lorsqu'il est disponible. Explique aussi que la probabilité de guidance raise "
@@ -157,9 +157,9 @@ def _build_financial_signal_prompt(
         f"Labels readiness: actuals={quarterly_readiness.get('actual_labels_ready', 'N/D')}, "
         f"guidance_benchmarks={quarterly_readiness.get('guidance_benchmarks_ready', 'N/D')}, "
         f"supervised_ready={quarterly_readiness.get('supervised_ready', 'N/D')}\n\n"
-        "Genere une lecture tres concise, analytique et orientee investisseur. "
-        "Maximum total vise: 8 lignes. "
-        "Privilegie l'interpretation plutot que la repetition brute des chiffres."
+        "Génère une lecture détaillée, réfléchie et orientée investisseur de haut vol. "
+        "Tu as carte blanche sur la longueur pour fournir une vraie valeur ajoutée basée sur l'interprétation des données cachées. "
+        "Privilégie l'analyse des dynamiques plutôt que la répétition brute des chiffres isolés."
     )
 
     return system_prompt, user_prompt
