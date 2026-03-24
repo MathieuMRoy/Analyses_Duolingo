@@ -53,6 +53,20 @@ def _round_or_none(value: float | None, digits: int = 6) -> float | None:
     return round(float(value), digits)
 
 
+def _safe_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 def _pct_or_none(value: float | None, digits: int = 2) -> float | None:
     if value is None or pd.isna(value):
         return None
@@ -212,6 +226,7 @@ def _build_daily_metrics(log_df: pd.DataFrame, target_panel_size: int) -> pd.Dat
             "active_users": active_users,
             "active_rate": active_rate,
             "avg_streak": avg_streak,
+            "paid_users": paid_users,
             "super_rate": _safe_ratio(super_users, panel_total),
             "max_rate": _safe_ratio(max_users, panel_total) if max_users is not None else None,
             "paid_rate": _safe_ratio(paid_users, panel_total),
@@ -407,9 +422,102 @@ def _build_engagement_quality_index(latest_row: pd.Series) -> float | None:
     return round(score * 100.0, 2)
 
 
-def _derive_main_drivers(latest_row: pd.Series, metrics_df: pd.DataFrame) -> tuple[list[str], list[str]]:
+def _delta_or_none(current: object, previous: object) -> float | None:
+    if current is None or previous is None:
+        return None
+    try:
+        if pd.isna(current) or pd.isna(previous):
+            return None
+    except Exception:
+        pass
+    try:
+        return float(current) - float(previous)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_count_text(value: int | None) -> str:
+    if value is None:
+        return "N/D"
+    return f"{int(value):,}".replace(",", " ")
+
+
+def _format_delta_pt_text(value: float | None, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/D"
+    return f"{float(value) * 100:+.{digits}f} pt".replace(".", ",")
+
+
+def _build_day_over_day_context(latest_row: pd.Series, metrics_df: pd.DataFrame) -> dict[str, object]:
+    previous_row = metrics_df.iloc[-2] if len(metrics_df) >= 2 else None
+
+    premium_gross_adds = _safe_int(latest_row.get("free_to_super"))
+    premium_losses = _safe_int(latest_row.get("super_to_free"))
+    premium_net_adds = None
+    if premium_gross_adds is not None and premium_losses is not None:
+        premium_net_adds = premium_gross_adds - premium_losses
+
+    free_to_max = _safe_int(latest_row.get("free_to_max"))
+    super_to_max = _safe_int(latest_row.get("super_to_max"))
+    max_to_super = _safe_int(latest_row.get("max_to_super"))
+    max_to_free = _safe_int(latest_row.get("max_to_free"))
+    max_net_adds = None
+    if None not in {free_to_max, super_to_max, max_to_super, max_to_free}:
+        max_net_adds = int(free_to_max + super_to_max - max_to_super - max_to_free)
+
+    def _previous_value(column_name: str) -> object:
+        if previous_row is None:
+            return None
+        return previous_row.get(column_name)
+
+    return {
+        "compared_to_date": previous_row["Date"].strftime("%Y-%m-%d") if previous_row is not None else None,
+        "premium_gross_adds_today": premium_gross_adds,
+        "premium_losses_today": premium_losses,
+        "premium_net_adds_today": premium_net_adds,
+        "max_net_adds_today": max_net_adds,
+        "reactivated_users_today": _safe_int(latest_row.get("reactivated_users")),
+        "churned_users_today": _safe_int(latest_row.get("churned_users")),
+        "paid_rate_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("paid_rate"), _previous_value("paid_rate"))
+        ),
+        "super_rate_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("super_rate"), _previous_value("super_rate"))
+        ),
+        "active_rate_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("active_rate"), _previous_value("active_rate"))
+        ),
+        "churn_rate_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("churn_rate"), _previous_value("churn_rate"))
+        ),
+        "reactivation_rate_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("reactivation_rate"), _previous_value("reactivation_rate"))
+        ),
+        "high_value_retention_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(
+                latest_row.get("high_value_retention_rate"),
+                _previous_value("high_value_retention_rate"),
+            )
+        ),
+        "avg_streak_delta_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("avg_streak"), _previous_value("avg_streak")),
+            2,
+        ),
+        "xp_delta_mean_vs_yesterday": _round_or_none(
+            _delta_or_none(latest_row.get("xp_delta_mean"), _previous_value("xp_delta_mean")),
+            2,
+        ),
+    }
+
+
+def _derive_main_drivers(
+    latest_row: pd.Series,
+    metrics_df: pd.DataFrame,
+    day_over_day: dict[str, object] | None = None,
+) -> tuple[list[str], list[str]]:
     drivers: list[str] = []
     risks: list[str] = []
+    day_over_day = day_over_day or {}
 
     premium_momentum_14d = _window_delta(metrics_df["super_rate"], 7)
     max_momentum_14d = _window_delta(metrics_df["max_rate"], 7)
@@ -418,31 +526,105 @@ def _derive_main_drivers(latest_row: pd.Series, metrics_df: pd.DataFrame) -> tup
     high_value_retention_trend = _window_delta(metrics_df["high_value_retention_rate"], 7)
     growth_acceleration_7d = _window_delta(metrics_df["xp_delta_mean"], 7)
 
+    def _append_unique(target: list[str], text: str) -> None:
+        if text and text not in target:
+            target.append(text)
+
+    panel_observed = _safe_int(latest_row.get("panel_observed")) or 0
+    material_subscription_count = max(25, int(round(panel_observed * 0.004)))
+    material_user_count = max(25, int(round(panel_observed * 0.003)))
+
+    premium_net_adds_today = _safe_int(day_over_day.get("premium_net_adds_today"))
+    paid_rate_delta = day_over_day.get("paid_rate_delta_vs_yesterday")
+    if premium_net_adds_today is not None and premium_net_adds_today >= material_subscription_count:
+        rate_clause = ""
+        if paid_rate_delta is not None and abs(float(paid_rate_delta)) >= 0.001:
+            rate_clause = (
+                f", avec un taux premium observable en hausse de {_format_delta_pt_text(paid_rate_delta)}"
+            )
+        _append_unique(
+            drivers,
+            (
+                "La monetisation s'ameliore aujourd'hui avec "
+                f"{_format_count_text(premium_net_adds_today)} abonnements nets observables vs hier"
+                f"{rate_clause}."
+            ),
+        )
+    elif premium_net_adds_today is not None and premium_net_adds_today <= -material_subscription_count:
+        rate_clause = ""
+        if paid_rate_delta is not None and abs(float(paid_rate_delta)) >= 0.001:
+            rate_clause = (
+                f", avec un taux premium observable en baisse de {_format_delta_pt_text(abs(float(paid_rate_delta)))}"
+            )
+        _append_unique(
+            risks,
+            (
+                "La monetisation se tasse aujourd'hui avec "
+                f"{_format_count_text(abs(premium_net_adds_today))} pertes nettes d'abonnements observables vs hier"
+                f"{rate_clause}."
+            ),
+        )
+
+    reactivated_users = _safe_int(day_over_day.get("reactivated_users_today"))
+    churned_users = _safe_int(day_over_day.get("churned_users_today"))
+    if reactivated_users is not None and churned_users is not None:
+        active_balance = reactivated_users - churned_users
+        if active_balance >= material_user_count:
+            _append_unique(
+                drivers,
+                (
+                    "Les reactivations compensent l'attrition aujourd'hui "
+                    f"({_format_count_text(reactivated_users)} reactivations contre "
+                    f"{_format_count_text(churned_users)} churns)."
+                ),
+            )
+        elif active_balance <= -material_user_count:
+            _append_unique(
+                risks,
+                (
+                    "Les sorties d'actifs dominent la journee "
+                    f"({_format_count_text(churned_users)} churns contre "
+                    f"{_format_count_text(reactivated_users)} reactivations)."
+                ),
+            )
+
+    churn_rate_delta = day_over_day.get("churn_rate_delta_vs_yesterday")
+    if churn_rate_delta is not None and float(churn_rate_delta) <= -0.003:
+        _append_unique(
+            drivers,
+            "L'attrition recule d'un jour sur l'autre, ce qui protege la base d'abonnes actifs.",
+        )
+    elif churn_rate_delta is not None and float(churn_rate_delta) >= 0.003:
+        _append_unique(
+            risks,
+            "L'attrition remonte d'un jour sur l'autre et peut rogner la base active.",
+        )
+
     if premium_momentum_14d is not None and premium_momentum_14d > 0.0025:
-        drivers.append("Le taux d'abonnement Super accelere sur la fenetre recente.")
+        _append_unique(drivers, "Le taux d'abonnement Super accelere sur la fenetre recente.")
     if max_momentum_14d is not None and max_momentum_14d > 0.001:
-        drivers.append("La penetration Max montre un momentum positif, meme a bas niveau.")
+        _append_unique(drivers, "La penetration Max montre un momentum positif, meme a bas niveau.")
     if churn_trend_14d is not None and churn_trend_14d < -0.005:
-        drivers.append("Le taux d'abandon se detend par rapport a la fenetre precedente.")
+        _append_unique(drivers, "Le taux d'abandon se detend par rapport a la fenetre precedente.")
     if reactivation_trend_7d is not None and reactivation_trend_7d > 0.005:
-        drivers.append("Les reactivations se renforcent et soutiennent la retention nette.")
+        _append_unique(drivers, "Les reactivations se renforcent et soutiennent la retention nette.")
     if high_value_retention_trend is not None and high_value_retention_trend > 0.005:
-        drivers.append("La retention des cohortes a forte valeur s'ameliore.")
+        _append_unique(drivers, "La retention des cohortes a forte valeur s'ameliore.")
     if growth_acceleration_7d is not None and growth_acceleration_7d > 5:
-        drivers.append("L'intensite d'apprentissage accelere sur les derniers jours.")
+        _append_unique(drivers, "L'intensite d'apprentissage accelere sur les derniers jours.")
 
     if premium_momentum_14d is not None and premium_momentum_14d < -0.0025:
-        risks.append("Le taux d'abonnement Super ralentit sur la fenetre recente.")
+        _append_unique(risks, "Le taux d'abonnement Super ralentit sur la fenetre recente.")
     if max_momentum_14d is not None and max_momentum_14d < -0.001:
-        risks.append("Le signal Max se deteriore, ce qui limite la lecture de monetisation premium.")
+        _append_unique(risks, "Le signal Max se deteriore, ce qui limite la lecture de monetisation premium.")
     if churn_trend_14d is not None and churn_trend_14d > 0.005:
-        risks.append("Le taux d'abandon remonte par rapport a la fenetre precedente.")
+        _append_unique(risks, "Le taux d'abandon remonte par rapport a la fenetre precedente.")
     if reactivation_trend_7d is not None and reactivation_trend_7d < -0.005:
-        risks.append("Les reactivations ralentissent sur la fenetre recente.")
+        _append_unique(risks, "Les reactivations ralentissent sur la fenetre recente.")
     if high_value_retention_trend is not None and high_value_retention_trend < -0.005:
-        risks.append("La retention de la cohorte Super-Actifs se tasse.")
+        _append_unique(risks, "La retention de la cohorte Super-Actifs se tasse.")
     if growth_acceleration_7d is not None and growth_acceleration_7d < -5:
-        risks.append("L'intensite d'apprentissage decelere, ce qui peut peser sur la monetisation.")
+        _append_unique(risks, "L'intensite d'apprentissage decelere, ce qui peut peser sur la monetisation.")
 
     if not drivers:
         drivers.append("Le signal est encore jeune; il faut plus d'historique pour faire ressortir un driver dominant.")
@@ -526,6 +708,8 @@ def build_financial_signal_sheet_df(signal_package: dict[str, object]) -> pd.Dat
     _add("Panel", "coverage_ratio", panel.get("coverage_ratio"), "Part du panel effectivement observee aujourd'hui.")
 
     for key, definition in {
+        "paid_users": "Nombre observable de comptes premium sur la date de reference.",
+        "paid_rate": "Part observable du panel premium au sens large via HasPlus.",
         "active_rate": "Part des utilisateurs observes avec une streak active.",
         "avg_streak": "Longueur moyenne de streak sur la date de reference.",
         "xp_delta_mean": "Croissance moyenne du XP contre la veille, borne a 0 si negative.",
@@ -537,6 +721,12 @@ def build_financial_signal_sheet_df(signal_package: dict[str, object]) -> pd.Dat
         "debutants_abandon_rate": "Part des Debutants actifs de la veille tombes a zero aujourd'hui.",
         "standard_abandon_rate": "Part des Standard actifs de la veille tombes a zero aujourd'hui.",
         "super_actifs_abandon_rate": "Part des Super-Actifs actifs de la veille tombes a zero aujourd'hui.",
+        "free_to_super": "Comptes passes du gratuit au premium observable entre hier et aujourd'hui.",
+        "super_to_free": "Comptes passes du premium observable au gratuit entre hier et aujourd'hui.",
+        "free_to_max": "Comptes passes du gratuit a Max entre hier et aujourd'hui.",
+        "super_to_max": "Comptes passes de Super a Max entre hier et aujourd'hui.",
+        "max_to_super": "Comptes passes de Max a Super entre hier et aujourd'hui.",
+        "max_to_free": "Comptes passes de Max au gratuit entre hier et aujourd'hui.",
     }.items():
         _add("Business", key, business.get(key), definition)
 
@@ -554,6 +744,25 @@ def build_financial_signal_sheet_df(signal_package: dict[str, object]) -> pd.Dat
         "confidence_level": "Niveau de confiance selon couverture panel et profondeur historique.",
     }.items():
         _add("FinancialProxy", key, proxy.get(key), definition)
+
+    for key, definition in {
+        "compared_to_date": "Date de comparaison utilisee pour les deltas jour contre jour.",
+        "premium_gross_adds_today": "Nouveaux abonnements observables detectes aujourd'hui vs la veille.",
+        "premium_losses_today": "Pertes d'abonnements observables detectees aujourd'hui vs la veille.",
+        "premium_net_adds_today": "Solde net d'abonnements observables aujourd'hui vs la veille.",
+        "max_net_adds_today": "Solde net d'abonnements Max aujourd'hui vs la veille quand la detection est fiable.",
+        "reactivated_users_today": "Nombre de profils redevenus actifs aujourd'hui.",
+        "churned_users_today": "Nombre de profils actifs hier devenus inactifs aujourd'hui.",
+        "paid_rate_delta_vs_yesterday": "Variation du taux premium observable entre aujourd'hui et hier.",
+        "super_rate_delta_vs_yesterday": "Variation du taux Super observable entre aujourd'hui et hier.",
+        "active_rate_delta_vs_yesterday": "Variation du taux d'activite entre aujourd'hui et hier.",
+        "churn_rate_delta_vs_yesterday": "Variation du taux d'abandon entre aujourd'hui et hier.",
+        "reactivation_rate_delta_vs_yesterday": "Variation du taux de reactivation entre aujourd'hui et hier.",
+        "high_value_retention_delta_vs_yesterday": "Variation de la retention high-value entre aujourd'hui et hier.",
+        "avg_streak_delta_vs_yesterday": "Variation de la streak moyenne entre aujourd'hui et hier.",
+        "xp_delta_mean_vs_yesterday": "Variation du delta XP moyen entre aujourd'hui et hier.",
+    }.items():
+        _add("DayOverDay", key, signal_package.get("daily_comparison", {}).get(key), definition)
 
     _add(
         "ModelReadiness",
@@ -625,7 +834,8 @@ def _build_signal_package_from_metrics(
         2,
     )
 
-    main_drivers, main_risks = _derive_main_drivers(latest_row, metrics_up_to_date)
+    day_over_day = _build_day_over_day_context(latest_row, metrics_up_to_date)
+    main_drivers, main_risks = _derive_main_drivers(latest_row, metrics_up_to_date, day_over_day)
     confidence_level = _build_confidence_level(latest_row, metrics_up_to_date)
     signal_bias = _build_signal_bias(latest_row, monetization_momentum_index, engagement_quality_index)
 
@@ -643,6 +853,7 @@ def _build_signal_package_from_metrics(
         },
         "business_signals": {
             "active_users": int(latest_row.get("active_users") or 0),
+            "paid_users": int(latest_row.get("paid_users") or 0),
             "active_rate": _round_or_none(latest_row.get("active_rate")),
             "avg_streak": _round_or_none(latest_row.get("avg_streak"), 2),
             "xp_delta_mean": _round_or_none(latest_row.get("xp_delta_mean"), 2),
@@ -650,6 +861,7 @@ def _build_signal_package_from_metrics(
             "reactivation_rate": _round_or_none(latest_row.get("reactivation_rate")),
             "churned_users": int(latest_row.get("churned_users") or 0) if pd.notna(latest_row.get("churned_users")) else None,
             "churn_rate": _round_or_none(latest_row.get("churn_rate")),
+            "paid_rate": _round_or_none(latest_row.get("paid_rate")),
             "super_rate": _round_or_none(latest_row.get("super_rate")),
             "max_rate": _round_or_none(latest_row.get("max_rate")),
             "high_value_active_rate": _round_or_none(latest_row.get("high_value_active_rate")),
@@ -663,7 +875,9 @@ def _build_signal_package_from_metrics(
             "super_to_max": int(latest_row.get("super_to_max") or 0) if pd.notna(latest_row.get("super_to_max")) else None,
             "super_to_free": int(latest_row.get("super_to_free") or 0) if pd.notna(latest_row.get("super_to_free")) else None,
             "max_to_free": int(latest_row.get("max_to_free") or 0) if pd.notna(latest_row.get("max_to_free")) else None,
+            "max_to_super": int(latest_row.get("max_to_super") or 0) if pd.notna(latest_row.get("max_to_super")) else None,
         },
+        "daily_comparison": day_over_day,
         "financial_proxy_signals": {
             "engagement_quality_index": engagement_quality_index,
             "engagement_quality_trend": _round_or_none(engagement_quality_trend),

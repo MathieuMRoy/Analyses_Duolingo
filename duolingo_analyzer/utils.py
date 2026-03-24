@@ -70,7 +70,12 @@ def truncate_text(text: str, max_chars: int) -> str:
     return f"{shortened}..."
 
 
-def compact_summary_text(text: object, max_sentences: int = 2, max_chars: int = 180) -> str:
+def compact_summary_text(
+    text: object,
+    max_sentences: int = 2,
+    max_chars: int = 180,
+    separator: str = " ",
+) -> str:
     clean = normalize_text(text)
     if not clean:
         return "-"
@@ -81,7 +86,7 @@ def compact_summary_text(text: object, max_sentences: int = 2, max_chars: int = 
     selected: list[str] = []
     current_length = 0
     for sentence in sentences:
-        candidate_length = current_length + (1 if selected else 0) + len(sentence)
+        candidate_length = current_length + (len(separator) if selected else 0) + len(sentence)
         if selected and candidate_length > max_chars:
             break
         selected.append(sentence)
@@ -89,7 +94,7 @@ def compact_summary_text(text: object, max_sentences: int = 2, max_chars: int = 
         if len(selected) >= max_sentences:
             break
 
-    return " ".join(selected) if selected else sentences[0]
+    return separator.join(selected) if selected else sentences[0]
 
 
 def compact_bullet_text(text: object, max_items: int = 2, max_chars: int = 95) -> str:

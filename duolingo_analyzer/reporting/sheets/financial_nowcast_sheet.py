@@ -36,6 +36,7 @@ def render_financial_nowcast_sheet(
     metadata = signal_package.get("metadata", {})
     panel = signal_package.get("panel", {})
     business = signal_package.get("business_signals", {})
+    daily = signal_package.get("daily_comparison", {})
     proxy = signal_package.get("financial_proxy_signals", {})
     assumptions = signal_package.get("assumptions", [])
     ai_sections = {
@@ -124,6 +125,7 @@ def render_financial_nowcast_sheet(
     coverage_ratio = panel.get("coverage_ratio")
     observed_users = panel.get("observed_users_today")
     target_users = panel.get("target_panel_size")
+    premium_net_adds_today = daily.get("premium_net_adds_today")
 
     drivers = proxy.get("main_drivers") or ["Aucun driver majeur identifié pour l'instant."]
     risks = proxy.get("main_risks") or ["Aucun risque majeur identifié pour l'instant."]
@@ -135,24 +137,36 @@ def render_financial_nowcast_sheet(
     )
     if ai_sections["RESUME"]:
         lead_text = ai_sections["RESUME"]
-    lead_text = compact_summary_text(lead_text, max_sentences=2, max_chars=165)
+    elif isinstance(premium_net_adds_today, numbers.Number):
+        if float(premium_net_adds_today) > 0:
+            lead_text = (
+                f"Signal {bias_label.lower()} avec confiance {confidence_label.lower()}. "
+                f"La monetisation s'ameliore aujourd'hui avec {pretty_fr_number(premium_net_adds_today, 0)} abonnements nets observables vs hier."
+            )
+        elif float(premium_net_adds_today) < 0:
+            lead_text = (
+                f"Signal {bias_label.lower()} avec confiance {confidence_label.lower()}. "
+                f"La monetisation se tasse aujourd'hui avec {pretty_fr_number(abs(float(premium_net_adds_today)), 0)} pertes nettes d'abonnements observables vs hier."
+            )
+    lead_text = compact_summary_text(lead_text, max_sentences=2, max_chars=220, separator="\n")
 
     trend_text = compact_bullet_text(
         ai_sections["TENDANCES"] or "\n".join(f"- {item}" for item in drivers),
         max_items=2,
-        max_chars=110,
+        max_chars=220,
     )
     attention_text = compact_bullet_text(
         ai_sections["ATTENTION"] or "\n".join(f"- {item}" for item in risks),
         max_items=2,
-        max_chars=110,
+        max_chars=220,
     )
 
     closing_text = compact_summary_text(
         ai_sections["CONSEILS"]
         or "Le signal du jour doit surtout être lu comme un briefing de tendance : on surveille la qualité d'engagement, la pression de churn et la dynamique premium.",
         max_sentences=2,
-        max_chars=150,
+        max_chars=180,
+        separator="\n",
     )
 
     bias_fill = {
@@ -381,7 +395,7 @@ def render_financial_nowcast_sheet(
     ws.row_dimensions[3].height = 24
     ws.row_dimensions[5].height = 24
     for row_idx in range(6, 11):
-        ws.row_dimensions[row_idx].height = 26 if row_idx != 6 else 34
+        ws.row_dimensions[row_idx].height = 30 if row_idx != 6 else 40
     ws.row_dimensions[12].height = 24
     ws.row_dimensions[13].height = 22
     ws.row_dimensions[14].height = 26
@@ -389,11 +403,11 @@ def render_financial_nowcast_sheet(
     ws.row_dimensions[16].height = 22
     ws.row_dimensions[18].height = 24
     for row_idx in range(19, 24):
-        ws.row_dimensions[row_idx].height = 28
+        ws.row_dimensions[row_idx].height = 34
     ws.row_dimensions[25].height = 24
-    ws.row_dimensions[26].height = 28
-    ws.row_dimensions[27].height = 28
-    ws.row_dimensions[28].height = 28
+    ws.row_dimensions[26].height = 32
+    ws.row_dimensions[27].height = 32
+    ws.row_dimensions[28].height = 32
     ws.row_dimensions[30].height = 24
     for row_idx in range(31, row_cursor):
         ws.row_dimensions[row_idx].height = 22

@@ -65,6 +65,7 @@ def _build_financial_signal_prompt(
     metadata = signal_package.get("metadata", {})
     panel = signal_package.get("panel", {})
     business = signal_package.get("business_signals", {})
+    daily = signal_package.get("daily_comparison", {})
     proxy = signal_package.get("financial_proxy_signals", {})
     quarterly_meta = (quarterly_nowcast or {}).get("metadata", {})
     quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
@@ -82,13 +83,16 @@ def _build_financial_signal_prompt(
         "d'un panel quotidien Duolingo et tu dois l'interpreter comme un nowcast business "
         "et financier. Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
         "Tu restes prudent, tu relies les comportements utilisateurs aux implications business "
+        "et tu fais des liens explicites entre les variations observees et leurs consequences. "
         f"et tu produis uniquement les sections suivantes, dans cet ordre exact : {sections_instruction}. "
         "Le rendu final sera insere dans des cases Excel de taille fixe : chaque section doit tenir "
         "en 3 a 4 lignes maximum. Utilise un francais fluide, professionnel et naturel. "
         "Evite de repeter les chiffres bruts si tu peux les interpreter. "
+        "Si des transitions jour contre jour sont disponibles, tu peux citer un ordre de grandeur "
+        "concret quand il eclaire vraiment la phrase, par exemple un nombre net d'abonnements vs hier. "
         "[RESUME] : 1 a 2 phrases maximum, lecture du jour. "
-        "[TENDANCES] : 2 puces maximum, tres courtes, uniquement ce qui s'ameliore. "
-        "[ATTENTION] : 2 puces maximum, tres courtes, uniquement les risques ou faiblesses. "
+        "[TENDANCES] : 2 puces maximum, compactes mais completes, uniquement ce qui s'ameliore. "
+        "[ATTENTION] : 2 puces maximum, compactes mais completes, uniquement les risques ou faiblesses. "
         "[CONSEILS] : 1 a 2 phrases maximum, conclusion actionnable. "
     )
     if quarterly_mode:
@@ -96,8 +100,8 @@ def _build_financial_signal_prompt(
             "[MODELE] : 2 phrases maximum. Explique clairement sur quels signaux repose le nowcast "
             "trimestriel et ce que signifient les probabilites de beat revenus, de beat EBITDA "
             "et de guidance raise. "
-            "[MODELE_TENDANCES] : 2 puces maximum, tres courtes, focalisees sur les drivers trimestriels. "
-            "[MODELE_RISQUES] : 2 puces maximum, tres courtes, focalisees sur les risques trimestriels. "
+            "[MODELE_TENDANCES] : 2 puces maximum, compactes mais completes, focalisees sur les drivers trimestriels. "
+            "[MODELE_RISQUES] : 2 puces maximum, compactes mais completes, focalisees sur les risques trimestriels. "
             "N'utilise jamais le mot 'proxy'. Pas de markdown decoratif, pas de gras, pas de jargon inutile. "
             "Le ton doit ressembler a une note d'analyste concise, pas a un resume scolaire."
         )
@@ -110,13 +114,28 @@ def _build_financial_signal_prompt(
         f"Utilisateurs observes aujourd'hui: {panel.get('observed_users_today', 'N/D')}\n"
         f"Couverture panel: {_format_ratio_pct(panel.get('coverage_ratio'))}\n\n"
         f"Active rate: {_format_ratio_pct(business.get('active_rate'))}\n"
+        f"Paid users observed: {business.get('paid_users', 'N/D')}\n"
+        f"Paid rate: {_format_ratio_pct(business.get('paid_rate'))}\n"
         f"Average streak: {business.get('avg_streak', 'N/D')}\n"
         f"XP delta mean: {business.get('xp_delta_mean', 'N/D')}\n"
         f"Churn rate: {_format_ratio_pct(business.get('churn_rate'))}\n"
         f"Reactivation rate: {_format_ratio_pct(business.get('reactivation_rate'))}\n"
         f"Super rate: {_format_ratio_pct(business.get('super_rate'))}\n"
         f"Max rate: {_format_ratio_pct(business.get('max_rate'))}\n"
-        f"High-value retention rate: {_format_ratio_pct(business.get('high_value_retention_rate'))}\n\n"
+        f"High-value retention rate: {_format_ratio_pct(business.get('high_value_retention_rate'))}\n"
+        f"Compared to previous day: {daily.get('compared_to_date', 'N/D')}\n"
+        f"Premium gross adds today: {daily.get('premium_gross_adds_today', 'N/D')}\n"
+        f"Premium losses today: {daily.get('premium_losses_today', 'N/D')}\n"
+        f"Premium net adds today: {daily.get('premium_net_adds_today', 'N/D')}\n"
+        f"Max net adds today: {daily.get('max_net_adds_today', 'N/D')}\n"
+        f"Reactivated users today: {daily.get('reactivated_users_today', 'N/D')}\n"
+        f"Churned users today: {daily.get('churned_users_today', 'N/D')}\n"
+        f"Paid rate delta vs previous day: {_format_ratio_pct(daily.get('paid_rate_delta_vs_yesterday'))}\n"
+        f"Super rate delta vs previous day: {_format_ratio_pct(daily.get('super_rate_delta_vs_yesterday'))}\n"
+        f"Active rate delta vs previous day: {_format_ratio_pct(daily.get('active_rate_delta_vs_yesterday'))}\n"
+        f"Churn rate delta vs previous day: {_format_ratio_pct(daily.get('churn_rate_delta_vs_yesterday'))}\n"
+        f"Reactivation rate delta vs previous day: {_format_ratio_pct(daily.get('reactivation_rate_delta_vs_yesterday'))}\n"
+        f"High-value retention delta vs previous day: {_format_ratio_pct(daily.get('high_value_retention_delta_vs_yesterday'))}\n\n"
         f"Engagement quality index: {proxy.get('engagement_quality_index', 'N/D')}\n"
         f"Engagement quality trend: {_format_ratio_pct(proxy.get('engagement_quality_trend'))}\n"
         f"Premium momentum 14d: {_format_ratio_pct(proxy.get('premium_momentum_14d'))}\n"
@@ -224,9 +243,9 @@ def generer_rapport_ia(
 
     if not rapport:
         if signal_package:
+            daily = signal_package.get("daily_comparison", {})
             proxy = signal_package.get("financial_proxy_signals", {})
             quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
-            quarterly_label = quarterly_model.get("quarter_signal_bias", "N/D")
             quarterly_revenue = quarterly_model.get(
                 "revenue_beat_probability",
                 quarterly_model.get(
@@ -242,28 +261,54 @@ def generer_rapport_ia(
                 "guidance_raise_probability",
                 quarterly_model.get("guidance_raise_probability_proxy", "N/D"),
             )
-            quarter_drivers = quarterly_model.get("main_drivers") or proxy.get("main_drivers") or []
-            quarter_risks = quarterly_model.get("main_risks") or proxy.get("main_risks") or []
-            quarter_drivers_text = "\n".join(f"- {item}" for item in quarter_drivers[:2]) or "- Les réactivations soutiennent encore la lecture."
-            quarter_risks_text = "\n".join(f"- {item}" for item in quarter_risks[:2]) or "- La calibration du modèle reste encore limitée."
+
+            signal_drivers = proxy.get("main_drivers") or []
+            signal_risks = proxy.get("main_risks") or []
+            quarter_drivers = quarterly_model.get("main_drivers") or signal_drivers
+            quarter_risks = quarterly_model.get("main_risks") or signal_risks
+            signal_drivers_text = "\n".join(f"- {item}" for item in signal_drivers[:2]) or "- Le signal reste stable."
+            signal_risks_text = "\n".join(f"- {item}" for item in signal_risks[:2]) or "- Pas de risque dominant."
+            quarter_drivers_text = "\n".join(f"- {item}" for item in quarter_drivers[:2]) or "- Les reactivations soutiennent encore la lecture."
+            quarter_risks_text = "\n".join(f"- {item}" for item in quarter_risks[:2]) or "- La calibration du modele reste encore limitee."
+
+            resume_parts: list[str] = []
+            premium_net_adds = daily.get("premium_net_adds_today")
+            if isinstance(premium_net_adds, (int, float)):
+                net_adds_value = int(round(float(premium_net_adds)))
+                if net_adds_value > 0:
+                    resume_parts.append(
+                        f"La monetisation s'ameliore aujourd'hui avec {net_adds_value:,} abonnements nets observables vs hier.".replace(",", " ")
+                    )
+                elif net_adds_value < 0:
+                    resume_parts.append(
+                        f"La monetisation se tasse aujourd'hui avec {abs(net_adds_value):,} pertes nettes d'abonnements observables vs hier.".replace(",", " ")
+                    )
+            resume_parts.append(
+                f"Le signal quotidien reste {proxy.get('signal_bias', 'neutral')} avec une confiance {proxy.get('confidence_level', 'low')}."
+            )
+            resume_text = " ".join(resume_parts)
+
             rapport = (
                 "[RESUME]\n"
-                "Le signal quotidien reste exploitable, mais le modèle trimestriel demeure une lecture implicite et prudente.\n\n"
+                f"{resume_text}\n\n"
                 "[TENDANCES]\n"
-                f"- Le biais du jour reste {proxy.get('signal_bias', 'neutral')}.\n"
-                f"- Le nowcast trimestriel ressort {str(quarterly_label).lower()}.\n\n"
+                f"{signal_drivers_text}\n\n"
                 "[ATTENTION]\n"
-                "- Les probabilités restent implicites tant que l'historique guidance n'est pas complet.\n\n"
+                f"{signal_risks_text}\n\n"
                 "[CONSEILS]\n"
-                "Utilisez ce rapport comme une lecture de direction et de préparation aux résultats, pas comme un verdict absolu.\n\n"
-                "[MODELE]\n"
-                "Le modèle trimestriel agrège la monétisation, l'engagement, la rétention, le churn, les réactivations et la couverture du panel. "
-                f"Il suggère aujourd'hui une probabilité implicite de {quarterly_revenue} pour les revenus, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relèvement de guidance.\n\n"
-                "[MODELE_TENDANCES]\n"
-                f"{quarter_drivers_text}\n\n"
-                "[MODELE_RISQUES]\n"
-                f"{quarter_risks_text}"
+                "Utilisez ce rapport comme une lecture de direction et de preparation aux resultats, pas comme un verdict absolu."
             )
+
+            if quarterly_nowcast is not None:
+                rapport += (
+                    "\n\n[MODELE]\n"
+                    "Le modele trimestriel agrege la monetisation, l'engagement, la retention, le churn, les reactivations et la couverture du panel. "
+                    f"Il suggere aujourd'hui une probabilite implicite de {quarterly_revenue} pour les revenus, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relevement de guidance.\n\n"
+                    "[MODELE_TENDANCES]\n"
+                    f"{quarter_drivers_text}\n\n"
+                    "[MODELE_RISQUES]\n"
+                    f"{quarter_risks_text}"
+                )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))
             rapport = (
