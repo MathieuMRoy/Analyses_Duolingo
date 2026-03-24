@@ -214,7 +214,15 @@ def sauvegarder_rapport_excel(
                 continue
 
             if sheet_name == QUARTERLY_SHEET and quarterly_nowcast:
-                render_quarterly_nowcast_sheet(ws, quarterly_nowcast, wb, QUARTERLY_RAW_SHEET, style_ctx)
+                render_quarterly_nowcast_sheet(
+                    ws,
+                    quarterly_nowcast,
+                    wb,
+                    QUARTERLY_RAW_SHEET,
+                    style_ctx,
+                    ia_report,
+                    render_helpers,
+                )
                 ws.freeze_panes = "A5"
                 continue
 

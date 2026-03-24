@@ -1,6 +1,7 @@
 """Renderer de la feuille Nowcast Trimestriel."""
 
 import numbers
+import re
 
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -13,6 +14,8 @@ def render_quarterly_nowcast_sheet(
     wb,
     raw_sheet_name: str,
     styles: dict[str, object],
+    ia_report: str | None = None,
+    helpers: dict[str, object] | None = None,
 ) -> None:
     for merged_range in list(ws.merged_cells.ranges):
         ws.unmerge_cells(str(merged_range))
@@ -64,6 +67,28 @@ def render_quarterly_nowcast_sheet(
     center_align = styles["center_align"]
     left_align = styles["left_align"]
     thin_border = styles["thin_border"]
+    helpers = helpers or {}
+    compact_summary_text = helpers.get(
+        "compact_summary_text",
+        lambda text, max_sentences=2, max_chars=180: str(text or "N/D"),
+    )
+    compact_bullet_text = helpers.get(
+        "compact_bullet_text",
+        lambda text, max_items=2, max_chars=95: str(text or "-"),
+    )
+
+    ai_sections = {
+        "MODELE": None,
+        "MODELE_TENDANCES": None,
+        "MODELE_RISQUES": None,
+        "TENDANCES": None,
+        "ATTENTION": None,
+    }
+    if ia_report:
+        for key in ai_sections.keys():
+            match = re.search(rf"\[{key}\](.*?)(?=\[|$)", ia_report, re.DOTALL)
+            if match:
+                ai_sections[key] = match.group(1).strip()
 
     canvas = "F4F7FA"
     paper = "FFFFFF"
@@ -96,6 +121,16 @@ def render_quarterly_nowcast_sheet(
     def _formula_text_literal(value: str) -> str:
         return '"' + str(value).replace('"', '""') + '"'
 
+    def _formula_multiline_literal(value: str) -> str:
+        lines = [line for line in str(value).splitlines() if line.strip()]
+        if not lines:
+            return '""'
+        parts = [_formula_text_literal(lines[0])]
+        for line in lines[1:]:
+            parts.append("CHAR(10)")
+            parts.append(_formula_text_literal(line))
+        return "&".join(parts)
+
     def _raw_lookup_formula(header: str, fallback: str = '"N/D"', quarter_ref: str = "$C$4") -> str:
         if not raw_ws or not quarter_column or header not in raw_headers:
             return f"={fallback}"
@@ -110,6 +145,31 @@ def render_quarterly_nowcast_sheet(
     def _raw_lookup_expr(header: str, fallback: str = '"N/D"', quarter_ref: str = "$C$4") -> str:
         formula = _raw_lookup_formula(header, fallback=fallback, quarter_ref=quarter_ref)
         return formula[1:] if formula.startswith("=") else formula
+
+    model_text = compact_summary_text(
+        ai_sections.get("MODELE") or "",
+        max_sentences=2,
+        max_chars=185,
+    )
+    model_trends = compact_bullet_text(
+        ai_sections.get("MODELE_TENDANCES") or ai_sections.get("TENDANCES") or "",
+        max_items=2,
+        max_chars=110,
+    )
+    model_risks = compact_bullet_text(
+        ai_sections.get("MODELE_RISQUES") or ai_sections.get("ATTENTION") or "",
+        max_items=2,
+        max_chars=110,
+    )
+
+    def _ai_or_lookup_formula(ai_text: str, raw_header: str, fallback: str = '"N/D"') -> str:
+        if not ai_text or ai_text in {"-", "N/D"} or not default_quarter:
+            return _raw_lookup_formula(raw_header, fallback=fallback)
+        return (
+            f'=IF($C$4={_formula_text_literal(default_quarter)},'
+            f'{_formula_multiline_literal(ai_text)},'
+            f'{_raw_lookup_expr(raw_header, fallback=fallback)})'
+        )
 
     def write_box(
         range_ref: str,
@@ -337,7 +397,7 @@ def render_quarterly_nowcast_sheet(
     write_box("A19:F19", "Lecture du modèle", fill=navy, font_color=white, size=11, bold=True)
     write_box(
         "A20:F23",
-        _raw_lookup_formula("model_summary_text"),
+        _ai_or_lookup_formula(model_text, "model_summary_text"),
         fill=paper,
         font_color=ink,
         size=11,
@@ -381,7 +441,7 @@ def render_quarterly_nowcast_sheet(
     write_box("E25:H25", "Risques principaux", fill=red, font_color=white, size=11, bold=True)
     write_box(
         "A26:D29",
-        _raw_lookup_formula("main_drivers_text"),
+        _ai_or_lookup_formula(model_trends, "main_drivers_text"),
         fill=soft_green,
         font_color=ink,
         size=10,
@@ -389,7 +449,7 @@ def render_quarterly_nowcast_sheet(
     )
     write_box(
         "E26:H29",
-        _raw_lookup_formula("main_risks_text"),
+        _ai_or_lookup_formula(model_risks, "main_risks_text"),
         fill=soft_red,
         font_color=ink,
         size=10,

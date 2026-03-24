@@ -135,24 +135,24 @@ def render_financial_nowcast_sheet(
     )
     if ai_sections["RESUME"]:
         lead_text = ai_sections["RESUME"]
-    lead_text = compact_summary_text(lead_text, max_sentences=2, max_chars=210)
+    lead_text = compact_summary_text(lead_text, max_sentences=2, max_chars=165)
 
     trend_text = compact_bullet_text(
         ai_sections["TENDANCES"] or "\n".join(f"- {item}" for item in drivers),
-        max_items=3,
-        max_chars=130,
+        max_items=2,
+        max_chars=110,
     )
     attention_text = compact_bullet_text(
         ai_sections["ATTENTION"] or "\n".join(f"- {item}" for item in risks),
-        max_items=3,
-        max_chars=130,
+        max_items=2,
+        max_chars=110,
     )
 
     closing_text = compact_summary_text(
         ai_sections["CONSEILS"]
         or "Le signal du jour doit surtout être lu comme un briefing de tendance : on surveille la qualité d'engagement, la pression de churn et la dynamique premium.",
         max_sentences=2,
-        max_chars=180,
+        max_chars=150,
     )
 
     bias_fill = {

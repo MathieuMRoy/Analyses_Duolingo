@@ -74,33 +74,32 @@ def _build_financial_signal_prompt(
     quarterly_mode = quarterly_nowcast is not None
     sections_instruction = "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]"
     if quarterly_mode:
-        sections_instruction += " [MODELE]"
+        sections_instruction += " [MODELE] [MODELE_TENDANCES] [MODELE_RISQUES]"
 
     system_prompt = (
-        "Tu es un analyste buy-side spécialisé en signaux avancés de monétisation et de rétention. "
-        "Tu reçois un paquet de signaux structurés dérivés d'un panel quotidien Duolingo. "
-        "Tu dois interpréter ces signaux comme un nowcast business et financier. "
-        "Tu ne dois pas inventer de probabilités supervisées si elles sont absentes. "
-        "Tu restes prudent, tu relies comportement utilisateur et implications business, "
-        f"et tu produis uniquement les sections suivantes dans cet ordre exact : {sections_instruction}. "
-        "Style professionnel et orienté investisseur expert. Ton analyse doit être profonde mais synthétique. "
-        "[RESUME] : Résume l'état actuel (2 à 3 phrases max). "
-        "[TENDANCES] : Puces analytiques sur ce qui s'améliore (3 puces max, courtes et denses). "
-        "[ATTENTION] : Puces analytiques sur ce qui se dégrade (3 puces max, courtes et denses). "
-        "[CONSEILS] : Conclusion stratégique (2 à 3 phrases max). "
-        "Utilise un français fluide, avec accents corrects, phrases complètes et vocabulaire naturel. "
-        "Évite de répéter les chiffres bruts inutilement. "
+        "Tu es un analyste buy-side specialise en signaux avances de monetisation, "
+        "d'engagement et de retention. Tu recois un paquet de signaux structures derives "
+        "d'un panel quotidien Duolingo et tu dois l'interpreter comme un nowcast business "
+        "et financier. Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
+        "Tu restes prudent, tu relies les comportements utilisateurs aux implications business "
+        f"et tu produis uniquement les sections suivantes, dans cet ordre exact : {sections_instruction}. "
+        "Le rendu final sera insere dans des cases Excel de taille fixe : chaque section doit tenir "
+        "en 3 a 4 lignes maximum. Utilise un francais fluide, professionnel et naturel. "
+        "Evite de repeter les chiffres bruts si tu peux les interpreter. "
+        "[RESUME] : 1 a 2 phrases maximum, lecture du jour. "
+        "[TENDANCES] : 2 puces maximum, tres courtes, uniquement ce qui s'ameliore. "
+        "[ATTENTION] : 2 puces maximum, tres courtes, uniquement les risques ou faiblesses. "
+        "[CONSEILS] : 1 a 2 phrases maximum, conclusion actionnable. "
     )
     if quarterly_mode:
         system_prompt += (
-            "[MODELE] : Expose clairement les prédictions du modèle. "
-            "Explique en détail que le modèle trimestriel agrège des signaux de monétisation, d'engagement, "
-            "de rétention, de churn, de réactivations et de couverture du panel. "
-            "Phrase 2 : explique clairement que la probabilité de beat revenus mesure la probabilité implicite de battre les revenus du trimestre, "
-            "avec une référence interne ancrée sur le guidance management lorsqu'il est disponible. Explique aussi que la probabilité de guidance raise "
-            "mesure la probabilité implicite d'un relèvement de guidance au trimestre suivant. "
-            "Fais un vrai français de note d'analyste : fluide, professionnel, naturel, avec accents corrects. "
-            "N'utilise jamais le mot 'proxy'. N'utilise pas de markdown décoratif, pas de **gras**, et pas d'anglais inutile hors beat, guidance et EBITDA."
+            "[MODELE] : 2 phrases maximum. Explique clairement sur quels signaux repose le nowcast "
+            "trimestriel et ce que signifient les probabilites de beat revenus, de beat EBITDA "
+            "et de guidance raise. "
+            "[MODELE_TENDANCES] : 2 puces maximum, tres courtes, focalisees sur les drivers trimestriels. "
+            "[MODELE_RISQUES] : 2 puces maximum, tres courtes, focalisees sur les risques trimestriels. "
+            "N'utilise jamais le mot 'proxy'. Pas de markdown decoratif, pas de gras, pas de jargon inutile. "
+            "Le ton doit ressembler a une note d'analyste concise, pas a un resume scolaire."
         )
 
     user_prompt = (
@@ -157,9 +156,10 @@ def _build_financial_signal_prompt(
         f"Labels readiness: actuals={quarterly_readiness.get('actual_labels_ready', 'N/D')}, "
         f"guidance_benchmarks={quarterly_readiness.get('guidance_benchmarks_ready', 'N/D')}, "
         f"supervised_ready={quarterly_readiness.get('supervised_ready', 'N/D')}\n\n"
-        "Génère une lecture réfléchie et orientée investisseur de haut vol. "
-        "Attention : tes réponses sont insérées dans des cases Excel de taille fixe. Garde un haut niveau d'analyse mais reste concis (maximum 3-4 lignes par section). "
-        "Privilégie l'analyse des dynamiques plutôt que la répétition brute des chiffres isolés."
+        "Genere une lecture reflechie, orientee investisseur, mais tres compacte. "
+        "Chaque bloc doit tenir dans une case Excel : maximum 3 a 4 lignes par section, "
+        "et 2 puces courtes maximum pour les sections a puces. "
+        "Privilegie l'analyse des dynamiques plutot que la repetition brute des chiffres."
     )
 
     return system_prompt, user_prompt
@@ -242,19 +242,27 @@ def generer_rapport_ia(
                 "guidance_raise_probability",
                 quarterly_model.get("guidance_raise_probability_proxy", "N/D"),
             )
+            quarter_drivers = quarterly_model.get("main_drivers") or proxy.get("main_drivers") or []
+            quarter_risks = quarterly_model.get("main_risks") or proxy.get("main_risks") or []
+            quarter_drivers_text = "\n".join(f"- {item}" for item in quarter_drivers[:2]) or "- Les réactivations soutiennent encore la lecture."
+            quarter_risks_text = "\n".join(f"- {item}" for item in quarter_risks[:2]) or "- La calibration du modèle reste encore limitée."
             rapport = (
                 "[RESUME]\n"
-                "Le signal quotidien et trimestriel est disponible, mais le modèle supervisé complet n'est pas encore branché.\n\n"
+                "Le signal quotidien reste exploitable, mais le modèle trimestriel demeure une lecture implicite et prudente.\n\n"
                 "[TENDANCES]\n"
-                f"- Biais du signal : {proxy.get('signal_bias', 'neutral')}.\n"
-                f"- Nowcast trimestriel : {quarterly_label} | Beat revenus : {quarterly_revenue} | Beat EBITDA : {quarterly_ebitda}.\n\n"
+                f"- Le biais du jour reste {proxy.get('signal_bias', 'neutral')}.\n"
+                f"- Le nowcast trimestriel ressort {str(quarterly_label).lower()}.\n\n"
                 "[ATTENTION]\n"
                 "- Les probabilités restent implicites tant que l'historique guidance n'est pas complet.\n\n"
                 "[CONSEILS]\n"
-                "Utiliser ce rapport comme couche explicable avant la modélisation supervisée.\n\n"
+                "Utilisez ce rapport comme une lecture de direction et de préparation aux résultats, pas comme un verdict absolu.\n\n"
                 "[MODELE]\n"
-                "Le modèle trimestriel agrège des signaux de monétisation, d'engagement, de rétention, de churn, de réactivations et de couverture du panel. "
-                f"Il suggère aujourd'hui une probabilité implicite de {quarterly_revenue} de battre les revenus du trimestre, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relèvement de guidance."
+                "Le modèle trimestriel agrège la monétisation, l'engagement, la rétention, le churn, les réactivations et la couverture du panel. "
+                f"Il suggère aujourd'hui une probabilité implicite de {quarterly_revenue} pour les revenus, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relèvement de guidance.\n\n"
+                "[MODELE_TENDANCES]\n"
+                f"{quarter_drivers_text}\n\n"
+                "[MODELE_RISQUES]\n"
+                f"{quarter_risks_text}"
             )
         else:
             date = stats.get("date_jour", datetime.now().strftime("%Y-%m-%d"))
