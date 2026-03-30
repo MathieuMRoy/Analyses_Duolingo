@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from functools import lru_cache
 import math
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 
 import pandas as pd
@@ -140,10 +141,44 @@ def _parse_compact_number(text: str | None) -> float | None:
     if text is None:
         return None
 
-    raw = str(text).strip().upper().replace(",", "").replace(" ", "")
+    raw = str(text).strip()
     if not raw:
         return None
 
+    normalized = (
+        raw.replace("\u202f", " ")
+        .replace("\xa0", " ")
+        .replace(" ", " ")
+        .strip()
+    )
+    lower = normalized.lower()
+
+    word_match = re.search(
+        r"([-+]?\d+(?:[.,]\d+)?)\s*(k|m|b|mille|thousand|million|millions|milliard|milliards|billion|billions)\b",
+        lower,
+        flags=re.IGNORECASE,
+    )
+    if word_match:
+        number = float(word_match.group(1).replace(",", "."))
+        suffix = word_match.group(2).lower()
+        multipliers = {
+            "k": 1_000.0,
+            "m": 1_000_000.0,
+            "b": 1_000_000_000.0,
+            "mille": 1_000.0,
+            "thousand": 1_000.0,
+            "million": 1_000_000.0,
+            "millions": 1_000_000.0,
+            "milliard": 1_000_000_000.0,
+            "milliards": 1_000_000_000.0,
+            "billion": 1_000_000_000.0,
+            "billions": 1_000_000_000.0,
+        }
+        multiplier = multipliers.get(suffix)
+        if multiplier is not None:
+            return number * multiplier
+
+    raw = normalized.upper().replace(",", "").replace(" ", "")
     multiplier = 1.0
     if raw.endswith("K"):
         multiplier = 1_000.0
@@ -159,6 +194,28 @@ def _parse_compact_number(text: str | None) -> float | None:
         return float(raw) * multiplier
     except ValueError:
         return None
+
+
+def _safe_get_text_via_curl(url: str, *, user_agent: str | None = None) -> str | None:
+    agent = user_agent or USER_AGENT
+    for executable in ("curl.exe", "curl"):
+        try:
+            response = subprocess.run(
+                [executable, "-L", "--max-time", "25", "-A", agent, url],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                timeout=30,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.SubprocessError):
+            continue
+
+        if response.returncode == 0 and response.stdout:
+            return response.stdout
+
+    return None
 
 
 def _format_fr_number(value: float | None, decimals: int = 0) -> str:
@@ -300,23 +357,31 @@ def _collect_instagram_followers(as_of_date: date) -> SignalReading | None:
     source = "Instagram public"
     notes = "Audience Instagram publique de Duolingo."
 
-    if page_text:
-        patterns = [
-            r'"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)',
-            r'content="([\d.,]+[KMB]?) Followers,\s*[\d.,]+ Following,\s*[\d.,]+ Posts',
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, page_text, flags=re.IGNORECASE | re.DOTALL)
+    texts_to_try = [page_text] if page_text else []
+    curl_text = _safe_get_text_via_curl("https://www.instagram.com/duolingo/", user_agent="Mozilla/5.0")
+    if curl_text and curl_text != page_text:
+        texts_to_try.append(curl_text)
+
+    patterns = [
+        (r'"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)', "exact"),
+        (r'content="([\d.,]+[KMB]?) Followers,\s*[\d.,]+ Following,\s*[\d.,]+ Posts', "compact"),
+        (r'content="([\d.,]+[KMB]?)\s+Followers', "compact"),
+    ]
+    for text in texts_to_try:
+        for pattern, mode in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
             if not match:
                 continue
-            if "Followers," in pattern:
-                value = _parse_compact_number(match.group(1))
-                source = "Instagram public"
-                notes = "Audience Instagram publique de Duolingo, lue depuis la meta description publique (valeur arrondie)."
-            else:
+            if mode == "exact":
                 value = _clean_numeric(match.group(1))
+                notes = "Audience Instagram publique de Duolingo, lue depuis la page officielle."
+            else:
+                value = _parse_compact_number(match.group(1))
+                notes = "Audience Instagram publique de Duolingo, lue depuis la meta description publique (valeur arrondie)."
             if value is not None:
                 break
+        if value is not None:
+            break
 
     if value is None:
         page_text = _fetch_socialblade_page("https://socialblade.com/instagram/user/duolingo")
@@ -380,10 +445,62 @@ def _collect_youtube_subscribers(as_of_date: date) -> SignalReading | None:
     notes = "Abonnes YouTube publics de Duolingo."
 
     if page_text:
+        api_key_match = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', page_text)
+        browse_id_match = re.search(r'"externalId":"([^"]+)"', page_text)
+        if api_key_match and browse_id_match:
+            try:
+                response = HTTP.post(
+                    f"https://www.youtube.com/youtubei/v1/browse?key={api_key_match.group(1)}",
+                    json={
+                        "context": {
+                            "client": {
+                                "clientName": "WEB",
+                                "clientVersion": "2.20260325.08.00",
+                                "hl": "fr",
+                                "gl": "US",
+                            }
+                        },
+                        "browseId": browse_id_match.group(1),
+                    },
+                    timeout=HTTP_TIMEOUT,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                metadata_rows = (
+                    payload.get("header", {})
+                    .get("pageHeaderRenderer", {})
+                    .get("content", {})
+                    .get("pageHeaderViewModel", {})
+                    .get("metadata", {})
+                    .get("contentMetadataViewModel", {})
+                    .get("metadataRows", [])
+                )
+                for row in metadata_rows:
+                    for part in row.get("metadataParts", []):
+                        text_obj = part.get("text", {})
+                        candidates = [
+                            text_obj.get("content"),
+                            text_obj.get("accessibilityLabel"),
+                        ]
+                        for candidate in candidates:
+                            candidate_value = _parse_compact_number(candidate)
+                            if candidate_value is not None and (
+                                "abonn" in str(candidate).lower() or "subscriber" in str(candidate).lower()
+                            ):
+                                value = candidate_value
+                                notes = "Abonnes YouTube publics de Duolingo, lus depuis le header officiel du canal."
+                                break
+                        if value is not None:
+                            break
+                    if value is not None:
+                        break
+            except Exception:
+                value = None
+
+    if value is None and page_text:
         patterns = [
-            r'"subscriberCountText"\s*:\s*\{.*?"simpleText"\s*:\s*"([\d.,]+[KMB]?)\s+subscribers"',
-            r'"ownerChannelName":"Duolingo".*?"subscriberCountText"\s*:\s*\{.*?"simpleText"\s*:\s*"([\d.,]+[KMB]?)\s+subscribers"',
-            r'content="[^"]*?([\d.,]+[KMB]?)\s+subscribers[^"]*?"\s+itemprop="description"',
+            r'"subscriberCountText"\s*:\s*\{.*?"simpleText"\s*:\s*"([\d.,]+[KMB]?)\s+(?:subscribers|abonnés?)"',
+            r'content="[^"]*?([\d.,]+[KMB]?)\s+(?:subscribers|abonnés?)[^"]*?"\s+itemprop="description"',
         ]
         for pattern in patterns:
             match = re.search(pattern, page_text, flags=re.IGNORECASE | re.DOTALL)
