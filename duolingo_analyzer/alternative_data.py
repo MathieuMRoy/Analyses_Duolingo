@@ -262,21 +262,6 @@ def _collect_google_trends(as_of_date: date) -> SignalReading | None:
     )
 
 
-def _collect_ios_rating_count(as_of_date: date) -> SignalReading | None:
-    app_data = _fetch_ios_lookup()
-    value = _clean_numeric(app_data.get("userRatingCount")) if isinstance(app_data, dict) else None
-    if value is None:
-        return None
-    return SignalReading(
-        signal_key="ios_rating_count",
-        signal_label="iOS Ratings Count",
-        value=value,
-        source="Apple App Store",
-        notes="Proxy de traction consommateur via le nombre cumule de notes iOS.",
-        sort_order=2,
-    )
-
-
 def _collect_ios_rating_score(as_of_date: date) -> SignalReading | None:
     app_data = _fetch_ios_lookup()
     value = _clean_numeric(app_data.get("averageUserRating")) if isinstance(app_data, dict) else None
@@ -385,7 +370,6 @@ def _collect_reddit_mentions(as_of_date: date) -> SignalReading | None:
 AUTO_COLLECTORS = [
     _collect_greenhouse_job_posts,
     _collect_google_trends,
-    _collect_ios_rating_count,
     _collect_ios_rating_score,
     _collect_reddit_mentions,
     _collect_instagram_followers,
