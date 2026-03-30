@@ -12,6 +12,11 @@ from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.layout import Layout, ManualLayout
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from .columns import (
+    CHART_DATA_SHEET as SHARED_CHART_DATA_SHEET,
+    SUMMARY_SHEET as SHARED_SUMMARY_SHEET,
+    TRENDS_SHEET as SHARED_TREND_SHEET,
+)
 from .config import DAILY_LOG_FILE
 from .utils import (
     delta_font_color,
@@ -29,6 +34,10 @@ from .utils import (
 SUMMARY_SHEET = "Suivi Quotidien"
 TREND_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Données Graphique"
+
+SUMMARY_SHEET = SHARED_SUMMARY_SHEET
+TREND_SHEET = SHARED_TREND_SHEET
+CHART_DATA_SHEET = SHARED_CHART_DATA_SHEET
 
 PERCENT_RATIO_COLUMNS = {
     "Taux Abonn. Super",

@@ -10,9 +10,19 @@ from openpyxl import load_workbook
 
 from .alternative_data import build_alternative_data_raw_df
 from .columns import (
-    AI_SHEET, ALT_DATA_RAW_SHEET, ALT_DATA_SHEET, BAD_SHEET_NAMES, CHART_DATA_SHEET, DCF_SHEET, GLOSSAIRE_RAW_SHEET,
-    GLOSSAIRE_SHEET, LEGACY_SHEET_NAMES, QUARTERLY_RAW_SHEET, QUARTERLY_SHEET,
-    SIGNALS_RAW_SHEET, SIGNALS_SHEET, SUMMARY_COLUMN_ALIASES, SUMMARY_SHEET, TRENDS_SHEET,
+    ALT_DATA_RAW_SHEET,
+    ALT_DATA_SHEET,
+    CHART_DATA_SHEET,
+    DCF_SHEET,
+    GLOSSAIRE_RAW_SHEET,
+    GLOSSAIRE_SHEET,
+    QUARTERLY_RAW_SHEET,
+    QUARTERLY_SHEET,
+    SIGNALS_RAW_SHEET,
+    SIGNALS_SHEET,
+    SUMMARY_COLUMN_ALIASES,
+    SUMMARY_SHEET,
+    TRENDS_SHEET,
 )
 from .config import DAILY_LOG_FILE, GOOGLE_DRIVE_REPORT_DIR, RAPPORT_EXCEL_FILE, REPORT_DIR
 from .excel_dashboard import refresh_trends_dashboard
@@ -25,13 +35,11 @@ from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, rend
 from .reporting.sheets.monthly_trends_sheet import add_monthly_trends_chart, build_monthly_trends_frames
 from .reporting.sheets.quarterly_nowcast_sheet import render_quarterly_nowcast_sheet
 from .reporting.sheets.summary_sheet import build_summary_today_df, merge_summary_history
+from .reporting.render_helpers import build_render_helpers
 from .reporting.styles import build_style_context
-from .reporting.workbook_postprocess import apply_standard_table_style, hide_sheets, remove_sheets, reorder_sheets
+from .reporting.workbook_layout import apply_standard_workbook_layout
+from .reporting.workbook_postprocess import apply_standard_table_style
 from .stats import _build_summary_history_from_log, _load_daily_log_df, _normalize_summary_df
-from .utils import (
-    compact_bullet_text, compact_summary_text, label_confidence, label_signal_bias,
-    pretty_delta_pts, pretty_fr_number, pretty_ratio_pct, pretty_score,
-)
 
 
 def _load_summary_sheet(report_path: Path) -> pd.DataFrame | None:
@@ -195,22 +203,14 @@ def sauvegarder_rapport_excel(
                 df_daily_conv.to_excel(writer, sheet_name=CHART_DATA_SHEET, index=False)
 
         wb = load_workbook(RAPPORT_EXCEL_FILE)
-
-        remove_sheets(wb, [*BAD_SHEET_NAMES, *LEGACY_SHEET_NAMES, AI_SHEET])
-        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, ALT_DATA_RAW_SHEET, GLOSSAIRE_RAW_SHEET])
+        apply_standard_workbook_layout(
+            wb,
+            include_dcf=DCF_SHEET in wb.sheetnames,
+            hide_chart_data=False,
+        )
 
         style_ctx = build_style_context()
-
-        render_helpers = {
-            "label_signal_bias": label_signal_bias,
-            "label_confidence": label_confidence,
-            "pretty_fr_number": pretty_fr_number,
-            "pretty_ratio_pct": pretty_ratio_pct,
-            "pretty_score": pretty_score,
-            "pretty_delta_pts": pretty_delta_pts,
-            "compact_summary_text": compact_summary_text,
-            "compact_bullet_text": compact_bullet_text,
-        }
+        render_helpers = build_render_helpers()
 
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
@@ -263,77 +263,20 @@ def sauvegarder_rapport_excel(
                 chart_data_sheet_name=CHART_DATA_SHEET,
             )
 
-        ordered_sheet_names = [
-            SUMMARY_SHEET,
-            SIGNALS_SHEET,
-            QUARTERLY_SHEET,
-            ALT_DATA_SHEET,
-            TRENDS_SHEET,
-            GLOSSAIRE_SHEET,
-            SIGNALS_RAW_SHEET,
-            QUARTERLY_RAW_SHEET,
-            ALT_DATA_RAW_SHEET,
-            GLOSSAIRE_RAW_SHEET,
-            CHART_DATA_SHEET,
-        ]
-        reorder_sheets(wb, ordered_sheet_names)
-
-        if DCF_SHEET in wb.sheetnames:
-            reorder_sheets(
-                wb,
-                [
-                    SUMMARY_SHEET,
-                    SIGNALS_SHEET,
-                    QUARTERLY_SHEET,
-                    ALT_DATA_SHEET,
-                    TRENDS_SHEET,
-                    DCF_SHEET,
-                    GLOSSAIRE_SHEET,
-                    SIGNALS_RAW_SHEET,
-                    QUARTERLY_RAW_SHEET,
-                    ALT_DATA_RAW_SHEET,
-                    GLOSSAIRE_RAW_SHEET,
-                    CHART_DATA_SHEET,
-                ],
-            )
+        apply_standard_workbook_layout(
+            wb,
+            include_dcf=DCF_SHEET in wb.sheetnames,
+            hide_chart_data=False,
+        )
 
         wb.save(RAPPORT_EXCEL_FILE)
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
         wb = load_workbook(RAPPORT_EXCEL_FILE)
-        remove_sheets(wb, [*BAD_SHEET_NAMES, *LEGACY_SHEET_NAMES, AI_SHEET])
-        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, ALT_DATA_RAW_SHEET, GLOSSAIRE_RAW_SHEET, CHART_DATA_SHEET])
-        ordered_sheet_names = [
-            SUMMARY_SHEET,
-            SIGNALS_SHEET,
-            QUARTERLY_SHEET,
-            ALT_DATA_SHEET,
-            TRENDS_SHEET,
-            GLOSSAIRE_SHEET,
-            SIGNALS_RAW_SHEET,
-            QUARTERLY_RAW_SHEET,
-            ALT_DATA_RAW_SHEET,
-            GLOSSAIRE_RAW_SHEET,
-            CHART_DATA_SHEET,
-        ]
-        reorder_sheets(wb, ordered_sheet_names)
-        if DCF_SHEET in wb.sheetnames:
-            reorder_sheets(
-                wb,
-                [
-                    SUMMARY_SHEET,
-                    SIGNALS_SHEET,
-                    QUARTERLY_SHEET,
-                    ALT_DATA_SHEET,
-                    TRENDS_SHEET,
-                    DCF_SHEET,
-                    GLOSSAIRE_SHEET,
-                    SIGNALS_RAW_SHEET,
-                    QUARTERLY_RAW_SHEET,
-                    ALT_DATA_RAW_SHEET,
-                    GLOSSAIRE_RAW_SHEET,
-                    CHART_DATA_SHEET,
-                ],
-            )
+        apply_standard_workbook_layout(
+            wb,
+            include_dcf=DCF_SHEET in wb.sheetnames,
+            hide_chart_data=True,
+        )
         wb.save(RAPPORT_EXCEL_FILE)
         google_drive_file = _copier_rapport_vers_google_drive(RAPPORT_EXCEL_FILE)
 

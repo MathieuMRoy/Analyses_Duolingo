@@ -8,11 +8,12 @@ from openpyxl import load_workbook
 from duolingo_analyzer.config import RAPPORT_EXCEL_FILE, REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
 from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
+from duolingo_analyzer.reporting.workbook_layout import apply_standard_workbook_layout
 from duolingo_analyzer.reporting.styles import build_style_context
 from duolingo_analyzer.columns import (
+    DCF_SHEET,
     GLOSSAIRE_RAW_SHEET,
     GLOSSAIRE_SHEET,
-    LEGACY_SHEET_NAMES,
     SUMMARY_SHEET,
 )
 from duolingo_analyzer.report_builder import _load_summary_sheet
@@ -63,13 +64,13 @@ def build_historique() -> None:
     refresh_trends_dashboard(HISTO_FILE)
 
     wb = load_workbook(HISTO_FILE)
-    for legacy_sheet_name in LEGACY_SHEET_NAMES:
-        if legacy_sheet_name in wb.sheetnames:
-            wb.remove(wb[legacy_sheet_name])
     if GLOSSAIRE_SHEET in wb.sheetnames:
         render_kpi_dictionary_sheet(wb[GLOSSAIRE_SHEET], wb, GLOSSAIRE_RAW_SHEET, build_style_context())
-    if GLOSSAIRE_RAW_SHEET in wb.sheetnames:
-        wb[GLOSSAIRE_RAW_SHEET].sheet_state = "hidden"
+    apply_standard_workbook_layout(
+        wb,
+        include_dcf=DCF_SHEET in wb.sheetnames,
+        hide_chart_data=True,
+    )
     wb.save(HISTO_FILE)
 
     print(f"OK: {HISTO_FILE}")
