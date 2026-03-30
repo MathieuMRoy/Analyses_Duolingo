@@ -448,6 +448,108 @@ def _format_delta_pt_text(value: float | None, digits: int = 1) -> str:
     return f"{float(value) * 100:+.{digits}f} pt".replace(".", ",")
 
 
+def _window_mean_and_delta(
+    series: pd.Series,
+    window: int,
+    *,
+    min_previous_points: int = 3,
+) -> tuple[float | None, float | None]:
+    cleaned = pd.to_numeric(series, errors="coerce").dropna()
+    if cleaned.empty:
+        return None, None
+
+    current = cleaned.tail(window)
+    if current.empty:
+        return None, None
+
+    current_mean = float(current.mean())
+    previous_pool = cleaned.iloc[:-len(current)]
+    if previous_pool.empty:
+        return current_mean, None
+
+    previous = previous_pool.tail(window)
+    if len(previous) < min_previous_points:
+        return current_mean, None
+
+    return current_mean, float(current_mean - previous.mean())
+
+
+def _build_horizon_summary(metrics_df: pd.DataFrame, window_days: int) -> dict[str, object]:
+    label = f"{window_days} jours"
+
+    super_avg, super_delta = _window_mean_and_delta(metrics_df["super_rate"], window_days)
+    churn_avg, churn_delta = _window_mean_and_delta(metrics_df["churn_rate"], window_days)
+    active_avg, active_delta = _window_mean_and_delta(metrics_df["active_rate"], window_days)
+    xp_avg, xp_delta = _window_mean_and_delta(metrics_df["xp_delta_mean"], window_days)
+    reactivation_avg, reactivation_delta = _window_mean_and_delta(metrics_df["reactivation_rate"], window_days)
+
+    momentum_bits: list[str] = []
+    if super_avg is not None:
+        if super_delta is not None and abs(super_delta) >= 0.001:
+            verb = "progresse" if super_delta > 0 else "recede"
+            momentum_bits.append(
+                f"le taux Super moyen {verb} a {super_avg * 100:.1f}% ({super_delta * 100:+.1f} pt)"
+            )
+        else:
+            momentum_bits.append(f"le taux Super moyen reste autour de {super_avg * 100:.1f}%")
+
+    if churn_avg is not None:
+        if churn_delta is not None and abs(churn_delta) >= 0.0005:
+            verb = "recule" if churn_delta < 0 else "remonte"
+            momentum_bits.append(
+                f"le churn moyen {verb} a {churn_avg * 100:.1f}% ({churn_delta * 100:+.1f} pt)"
+            )
+        else:
+            momentum_bits.append(f"le churn moyen reste proche de {churn_avg * 100:.1f}%")
+
+    engagement_bits: list[str] = []
+    if active_avg is not None:
+        if active_delta is not None and abs(active_delta) >= 0.002:
+            verb = "s'ameliore" if active_delta > 0 else "se tasse"
+            engagement_bits.append(
+                f"l'engagement moyen {verb} a {active_avg * 100:.1f}% ({active_delta * 100:+.1f} pt)"
+            )
+        else:
+            engagement_bits.append(f"l'engagement moyen tient a {active_avg * 100:.1f}%")
+
+    if xp_avg is not None:
+        if xp_delta is not None and abs(xp_delta) >= 5:
+            engagement_bits.append(f"le XP quotidien moyen ressort a {xp_avg:.0f} XP ({xp_delta:+.0f} vs periode precedente)")
+        else:
+            engagement_bits.append(f"le XP quotidien moyen ressort a {xp_avg:.0f} XP")
+
+    if reactivation_avg is not None and reactivation_delta is not None and abs(reactivation_delta) >= 0.0005:
+        verb = "progressent" if reactivation_delta > 0 else "ralentissent"
+        engagement_bits.append(
+            f"les reactivations {verb} legerement ({reactivation_delta * 100:+.1f} pt)"
+        )
+
+    sentences: list[str] = []
+    if momentum_bits:
+        sentences.append(f"Sur {label}, " + " tandis que ".join(momentum_bits[:2]) + ".")
+    if engagement_bits:
+        sentences.append(f"En parallele, " + " et ".join(engagement_bits[:2]) + ".")
+
+    if not sentences:
+        sentences.append(f"Le recul historique sur {label} reste encore trop limite pour faire emerger une tendance lisible.")
+
+    summary_text = " ".join(sentences)
+    return {
+        "window_days": window_days,
+        "summary_text": summary_text,
+        "super_rate_avg": _round_or_none(super_avg),
+        "super_rate_delta_vs_prev_window": _round_or_none(super_delta),
+        "churn_rate_avg": _round_or_none(churn_avg),
+        "churn_rate_delta_vs_prev_window": _round_or_none(churn_delta),
+        "active_rate_avg": _round_or_none(active_avg),
+        "active_rate_delta_vs_prev_window": _round_or_none(active_delta),
+        "xp_delta_mean_avg": _round_or_none(xp_avg, 2),
+        "xp_delta_mean_delta_vs_prev_window": _round_or_none(xp_delta, 2),
+        "reactivation_rate_avg": _round_or_none(reactivation_avg),
+        "reactivation_rate_delta_vs_prev_window": _round_or_none(reactivation_delta),
+    }
+
+
 def _build_day_over_day_context(latest_row: pd.Series, metrics_df: pd.DataFrame) -> dict[str, object]:
     previous_row = metrics_df.iloc[-2] if len(metrics_df) >= 2 else None
 
@@ -838,6 +940,10 @@ def _build_signal_package_from_metrics(
     main_drivers, main_risks = _derive_main_drivers(latest_row, metrics_up_to_date, day_over_day)
     confidence_level = _build_confidence_level(latest_row, metrics_up_to_date)
     signal_bias = _build_signal_bias(latest_row, monetization_momentum_index, engagement_quality_index)
+    horizon_context = {
+        "seven_day": _build_horizon_summary(metrics_up_to_date, 7),
+        "thirty_day": _build_horizon_summary(metrics_up_to_date, 30),
+    }
 
     package: dict[str, object] = {
         "metadata": {
@@ -878,6 +984,7 @@ def _build_signal_package_from_metrics(
             "max_to_super": int(latest_row.get("max_to_super") or 0) if pd.notna(latest_row.get("max_to_super")) else None,
         },
         "daily_comparison": day_over_day,
+        "horizon_context": horizon_context,
         "financial_proxy_signals": {
             "engagement_quality_index": engagement_quality_index,
             "engagement_quality_trend": _round_or_none(engagement_quality_trend),

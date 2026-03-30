@@ -373,6 +373,8 @@ def _collect_instagram_followers(as_of_date: date) -> SignalReading | None:
 
     patterns = [
         (r'"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)', "exact"),
+        (r'property="og:description"\s+content="([\d.,]+[KMB]?)\s+Followers', "compact"),
+        (r'content="([\d.,]+[KMB]?)\s+Followers[^"]*"\s+property="og:description"', "compact"),
         (r'content="([\d.,]+[KMB]?) Followers,\s*[\d.,]+ Following,\s*[\d.,]+ Posts', "compact"),
         (r'content="([\d.,]+[KMB]?)\s+Followers', "compact"),
     ]

@@ -56,6 +56,7 @@ def render_dcf_valuation_sheet(
     metadata = package.get("metadata", {})
     assumptions = package.get("assumptions", {})
     anchors = package.get("anchors", {})
+    market = package.get("market_context", {})
     notes = package.get("assumption_notes", []) or []
 
     def write_box(
@@ -120,7 +121,6 @@ def render_dcf_valuation_sheet(
     write_anchor_row(8, "Revenus trimestriels estimes", anchors.get("estimated_revenue_current_quarter_musd"), fmt='0.0 "M$"')
     write_anchor_row(9, "EBITDA trimestriel estime", anchors.get("estimated_ebitda_current_quarter_musd"), fmt='0.0 "M$"')
     write_anchor_row(10, "Guidance FY de reference", anchors.get("fy_guidance_revenue_musd"), fmt='0.0 "M$"')
-
     write_box("A11:C11", "DONNEES DE BASE", fill=steel, font_color=white, size=11, bold=True)
     write_box("E11:I11", "PROJECTIONS (FCF)", fill=steel, font_color=white, size=11, bold=True)
 
@@ -224,16 +224,41 @@ def render_dcf_valuation_sheet(
         size=36,
         bold=True,
     )
+    write_box("K20:N20", "COURS ACTUEL", fill=steel, font_color=white, size=11, bold=True)
     write_box(
-        "K20:N20",
-        "Valorisation DCF implicite",
+        "K21:N22",
+        market.get("current_share_price"),
+        fill=paper,
+        font_color=ink,
+        size=20,
+        bold=True,
+        number_format='$ 0.00',
+    )
+    write_box("K23:N23", "UPSIDE / DOWNSIDE", fill=gold, font_color=white, size=11, bold=True)
+    write_box(
+        "K24:N25",
+        '=IF(OR(K21="",K21=0),"N/D",($C$28/$C$21)/K21-1)',
+        fill=soft_gold,
+        font_color=green,
+        size=20,
+        bold=True,
+        number_format="0.0%",
+    )
+    market_note = "Comparaison vs cours actuel"
+    if market.get("market_source"):
+        market_note = f"{market_note} | Source : {market.get('market_source')}"
+    if market.get("market_timestamp"):
+        market_note = f"{market_note} | Date : {market.get('market_timestamp')}"
+    write_box(
+        "K26:N27",
+        market_note,
         fill=canvas,
         font_color=muted,
         size=9,
-        align=Alignment(horizontal="center", vertical="center"),
+        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    for row in [6, 7, 8, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 26, 27, 28]:
+    for row in [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 26, 27, 28]:
         ws.row_dimensions[row].height = 24
     for row in [30, 31, 32]:
         ws.row_dimensions[row].height = 24

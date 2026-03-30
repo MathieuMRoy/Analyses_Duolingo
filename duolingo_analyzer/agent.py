@@ -71,6 +71,9 @@ def _build_financial_signal_prompt(
     quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
     quarterly_current = (quarterly_nowcast or {}).get("current_quarter", {})
     quarterly_readiness = (quarterly_nowcast or {}).get("labels_readiness", {})
+    horizon = signal_package.get("horizon_context", {})
+    seven_day = horizon.get("seven_day", {})
+    thirty_day = horizon.get("thirty_day", {})
 
     quarterly_mode = quarterly_nowcast is not None
     sections_instruction = "[RESUME] [TENDANCES] [ATTENTION] [CONSEILS]"
@@ -84,6 +87,7 @@ def _build_financial_signal_prompt(
         "et financier. Tu ne dois pas inventer de probabilites supervisees si elles sont absentes. "
         "Tu restes prudent, tu relies les comportements utilisateurs aux implications business "
         "et tu fais des liens explicites entre les variations observees et leurs consequences. "
+        "Quand un recul 7 jours ou 30 jours est disponible, privilegie cette lecture a un commentaire trop colle au bruit du jour. "
         f"et tu produis uniquement les sections suivantes, dans cet ordre exact : {sections_instruction}. "
         "Le rendu final sera insere dans des cases Excel de taille fixe : chaque section doit tenir "
         "en 3 a 4 lignes maximum. Utilise un francais fluide, professionnel et naturel. "
@@ -121,13 +125,11 @@ def _build_financial_signal_prompt(
         f"Churn rate: {_format_ratio_pct(business.get('churn_rate'))}\n"
         f"Reactivation rate: {_format_ratio_pct(business.get('reactivation_rate'))}\n"
         f"Super rate: {_format_ratio_pct(business.get('super_rate'))}\n"
-        f"Max rate: {_format_ratio_pct(business.get('max_rate'))}\n"
         f"High-value retention rate: {_format_ratio_pct(business.get('high_value_retention_rate'))}\n"
         f"Compared to previous day: {daily.get('compared_to_date', 'N/D')}\n"
         f"Premium gross adds today: {daily.get('premium_gross_adds_today', 'N/D')}\n"
         f"Premium losses today: {daily.get('premium_losses_today', 'N/D')}\n"
         f"Premium net adds today: {daily.get('premium_net_adds_today', 'N/D')}\n"
-        f"Max net adds today: {daily.get('max_net_adds_today', 'N/D')}\n"
         f"Reactivated users today: {daily.get('reactivated_users_today', 'N/D')}\n"
         f"Churned users today: {daily.get('churned_users_today', 'N/D')}\n"
         f"Paid rate delta vs previous day: {_format_ratio_pct(daily.get('paid_rate_delta_vs_yesterday'))}\n"
@@ -136,10 +138,11 @@ def _build_financial_signal_prompt(
         f"Churn rate delta vs previous day: {_format_ratio_pct(daily.get('churn_rate_delta_vs_yesterday'))}\n"
         f"Reactivation rate delta vs previous day: {_format_ratio_pct(daily.get('reactivation_rate_delta_vs_yesterday'))}\n"
         f"High-value retention delta vs previous day: {_format_ratio_pct(daily.get('high_value_retention_delta_vs_yesterday'))}\n\n"
+        f"7d summary: {seven_day.get('summary_text', 'N/D')}\n"
+        f"30d summary: {thirty_day.get('summary_text', 'N/D')}\n\n"
         f"Engagement quality index: {proxy.get('engagement_quality_index', 'N/D')}\n"
         f"Engagement quality trend: {_format_ratio_pct(proxy.get('engagement_quality_trend'))}\n"
         f"Premium momentum 14d: {_format_ratio_pct(proxy.get('premium_momentum_14d'))}\n"
-        f"Max momentum 14d: {_format_ratio_pct(proxy.get('max_momentum_14d'))}\n"
         f"Churn trend 14d: {_format_ratio_pct(proxy.get('churn_trend_14d'))}\n"
         f"Reactivation trend 7d: {_format_ratio_pct(proxy.get('reactivation_trend_7d'))}\n"
         f"High-value retention trend: {_format_ratio_pct(proxy.get('high_value_retention_trend'))}\n"
@@ -165,6 +168,7 @@ def _build_financial_signal_prompt(
         f"Estimated EBITDA: {_format_money_musd(quarterly_model.get('estimated_ebitda_musd'))}\n"
         f"Guidance raise probability: {quarterly_model.get('guidance_raise_probability', quarterly_model.get('guidance_raise_probability_proxy', 'N/D'))}\n"
         f"Estimated next-quarter guidance: {_format_money_musd(quarterly_model.get('estimated_next_q_guidance_musd'))}\n"
+        f"Quarter confidence context: {quarterly_model.get('confidence_context_text', 'N/D')}\n"
         f"Quarter observed days: {quarterly_current.get('observed_days', 'N/D')}\n"
         f"Quarter avg coverage ratio: {_format_ratio_pct(quarterly_current.get('avg_coverage_ratio'))}\n"
         f"Quarter premium momentum 14d: {_format_ratio_pct(quarterly_current.get('avg_premium_momentum_14d'))}\n"
@@ -178,7 +182,7 @@ def _build_financial_signal_prompt(
         "Genere une lecture reflechie, orientee investisseur, mais tres compacte. "
         "Chaque bloc doit tenir dans une case Excel : maximum 3 a 4 lignes par section, "
         "et 2 puces courtes maximum pour les sections a puces. "
-        "Privilegie l'analyse des dynamiques plutot que la repetition brute des chiffres."
+        "Privilegie l'analyse des dynamiques, la consequence business et l'element a surveiller ensuite."
     )
 
     return system_prompt, user_prompt
@@ -244,6 +248,7 @@ def generer_rapport_ia(
     if not rapport:
         if signal_package:
             daily = signal_package.get("daily_comparison", {})
+            horizon = signal_package.get("horizon_context", {})
             proxy = signal_package.get("financial_proxy_signals", {})
             quarterly_model = (quarterly_nowcast or {}).get("model_output", {})
             quarterly_revenue = quarterly_model.get(
@@ -283,10 +288,18 @@ def generer_rapport_ia(
                     resume_parts.append(
                         f"La monetisation se tasse aujourd'hui avec {abs(net_adds_value):,} pertes nettes d'abonnements observables vs hier.".replace(",", " ")
                     )
+            seven_day_text = str((horizon.get("seven_day") or {}).get("summary_text") or "").strip()
+            thirty_day_text = str((horizon.get("thirty_day") or {}).get("summary_text") or "").strip()
             resume_parts.append(
                 f"Le signal quotidien reste {proxy.get('signal_bias', 'neutral')} avec une confiance {proxy.get('confidence_level', 'low')}."
             )
+            if seven_day_text:
+                resume_parts.append(seven_day_text)
             resume_text = " ".join(resume_parts)
+
+            conseil_text = "On surveille surtout la monetisation observable, la tenue de l'engagement et la pression de churn."
+            if thirty_day_text:
+                conseil_text = thirty_day_text
 
             rapport = (
                 "[RESUME]\n"
@@ -296,14 +309,15 @@ def generer_rapport_ia(
                 "[ATTENTION]\n"
                 f"{signal_risks_text}\n\n"
                 "[CONSEILS]\n"
-                "Utilisez ce rapport comme une lecture de direction et de preparation aux resultats, pas comme un verdict absolu."
+                f"{conseil_text}"
             )
 
             if quarterly_nowcast is not None:
                 rapport += (
                     "\n\n[MODELE]\n"
                     "Le modele trimestriel agrege la monetisation, l'engagement, la retention, le churn, les reactivations et la couverture du panel. "
-                    f"Il suggere aujourd'hui une probabilite implicite de {quarterly_revenue} pour les revenus, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relevement de guidance.\n\n"
+                    f"Il suggere aujourd'hui une probabilite implicite de {quarterly_revenue} pour les revenus, de {quarterly_ebitda} pour l'EBITDA et de {quarterly_guidance} pour un relevement de guidance. "
+                    f"{quarterly_model.get('confidence_context_text', '')}\n\n"
                     "[MODELE_TENDANCES]\n"
                     f"{quarter_drivers_text}\n\n"
                     "[MODELE_RISQUES]\n"

@@ -1,6 +1,7 @@
 """Renderer de la feuille Nowcast Trimestriel."""
 
-import numbers
+from __future__ import annotations
+
 import re
 
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -67,14 +68,15 @@ def render_quarterly_nowcast_sheet(
     center_align = styles["center_align"]
     left_align = styles["left_align"]
     thin_border = styles["thin_border"]
+
     helpers = helpers or {}
     compact_summary_text = helpers.get(
         "compact_summary_text",
-        lambda text, max_sentences=2, max_chars=180: str(text or "N/D"),
+        lambda text, max_sentences=2, max_chars=180, separator="\n": str(text or "N/D"),
     )
     compact_bullet_text = helpers.get(
         "compact_bullet_text",
-        lambda text, max_items=2, max_chars=95: str(text or "-"),
+        lambda text, max_items=2, max_chars=120: str(text or "-"),
     )
 
     ai_sections = {
@@ -104,7 +106,6 @@ def render_quarterly_nowcast_sheet(
     green = "2E7D5A"
     red = "C65A46"
     orange = "C98A3D"
-    light_label = "DCE7F1"
 
     for column_letter, width in {
         "A": 17,
@@ -146,24 +147,8 @@ def render_quarterly_nowcast_sheet(
         formula = _raw_lookup_formula(header, fallback=fallback, quarter_ref=quarter_ref)
         return formula[1:] if formula.startswith("=") else formula
 
-    model_text = compact_summary_text(
-        ai_sections.get("MODELE") or "",
-        max_sentences=2,
-        max_chars=185,
-    )
-    model_trends = compact_bullet_text(
-        ai_sections.get("MODELE_TENDANCES") or ai_sections.get("TENDANCES") or "",
-        max_items=2,
-        max_chars=110,
-    )
-    model_risks = compact_bullet_text(
-        ai_sections.get("MODELE_RISQUES") or ai_sections.get("ATTENTION") or "",
-        max_items=2,
-        max_chars=110,
-    )
-
     def _ai_or_lookup_formula(ai_text: str, raw_header: str, fallback: str = '"N/D"') -> str:
-        if not ai_text or ai_text in {"-", "N/D"} or not default_quarter:
+        if not ai_text or ai_text in {"-", "N/D"}:
             return _raw_lookup_formula(raw_header, fallback=fallback)
         return (
             f'=IF($C$4={_formula_text_literal(default_quarter)},'
@@ -173,7 +158,7 @@ def render_quarterly_nowcast_sheet(
 
     def write_box(
         range_ref: str,
-        value: str,
+        value: object,
         *,
         fill: str = paper,
         font_color: str = ink,
@@ -232,10 +217,10 @@ def render_quarterly_nowcast_sheet(
     summary_formula = (
         '="Date snapshot : "&'
         + _raw_lookup_expr("snapshot_as_of_date")
-        + '&" | Trimestre affiché : "&$C$4'
+        + '&" | Trimestre affiche : "&$C$4'
         + '&" | Statut : "&'
         + _raw_lookup_expr("snapshot_status_label")
-        + '&" | Jours observés : "&'
+        + '&" | Jours observes : "&'
         + _raw_lookup_expr("observed_days", fallback='"0"')
         + '&" | Couverture moyenne : "&IFERROR(TEXT('
         + _raw_lookup_expr("avg_coverage_ratio", fallback="0")
@@ -245,22 +230,30 @@ def render_quarterly_nowcast_sheet(
     guidance_reference_formula = (
         '=IFERROR(IF('
         + _raw_lookup_expr("revenue_guidance_reference_musd", fallback="0")
-        + '>0, "Guidance de référence : "&TEXT('
+        + '>0, "Guidance de reference : "&TEXT('
         + _raw_lookup_expr("revenue_guidance_reference_musd", fallback="0")
         + ', "0.0")&" M$"&IF('
         + _raw_lookup_expr("revenue_guidance_reference_quarter", fallback='""')
         + '<>""," ("&'
         + _raw_lookup_expr("revenue_guidance_reference_quarter", fallback='""')
-        + '&")",""), "Guidance de référence : N/D"), "Guidance de référence : N/D")'
+        + '&")",""), "Guidance de reference : N/D"), "Guidance de reference : N/D")'
     )
 
-    cadence_formula = (
-        '="Score : "&IFERROR(TEXT('
-        + _raw_lookup_expr("quarter_signal_score", fallback="0")
-        + ', "0.0")&"/100","N/D")'
-        + '&" | Taux actifs : "&IFERROR(TEXT('
-        + _raw_lookup_expr("avg_active_rate", fallback="0")
-        + ', "0.0%"),"N/D")'
+    model_text = compact_summary_text(
+        ai_sections.get("MODELE") or "",
+        max_sentences=2,
+        max_chars=190,
+        separator="\n",
+    )
+    model_trends = compact_bullet_text(
+        ai_sections.get("MODELE_TENDANCES") or ai_sections.get("TENDANCES") or "",
+        max_items=2,
+        max_chars=115,
+    )
+    model_risks = compact_bullet_text(
+        ai_sections.get("MODELE_RISQUES") or ai_sections.get("ATTENTION") or "",
+        max_items=2,
+        max_chars=115,
     )
 
     write_box("A1:H2", "NOWCAST TRIMESTRIEL", fill=navy, font_color=white, size=18, bold=True)
@@ -273,11 +266,11 @@ def render_quarterly_nowcast_sheet(
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("A4:B4", "Trimestre affiché", fill=blue_section, font_color=white, size=10, bold=True)
+    write_box("A4:B4", "Trimestre affiche", fill=blue_section, font_color=white, size=10, bold=True)
     write_box("C4", default_quarter, fill=paper, font_color=ink, size=11, bold=True)
     write_box(
         "D4:H4",
-        "Sélectionnez un trimestre pour relire son snapshot figé et ses estimations.",
+        "Selectionnez un trimestre pour relire son snapshot fige et ses estimations.",
         fill=canvas,
         font_color=muted,
         size=9,
@@ -290,8 +283,8 @@ def render_quarterly_nowcast_sheet(
             formula1=_formula_text_literal(",".join(available_quarters)),
             allow_blank=False,
         )
-        validation.promptTitle = "Sélection du trimestre"
-        validation.prompt = "Choisissez le trimestre à afficher."
+        validation.promptTitle = "Selection du trimestre"
+        validation.prompt = "Choisissez le trimestre a afficher."
         ws.add_data_validation(validation)
         validation.add(ws["C4"])
 
@@ -341,14 +334,14 @@ def render_quarterly_nowcast_sheet(
     )
     write_box(
         "G11:H11",
-        cadence_formula,
+        '="Snapshot : "&' + _raw_lookup_expr("snapshot_status_label"),
         fill=soft_slate,
         font_color=muted,
         size=9,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("A13:H13", "Probabilités implicites", fill=blue_section, font_color=white, size=11, bold=True)
+    write_box("A13:H13", "Probabilites implicites", fill=blue_section, font_color=white, size=11, bold=True)
     write_metric_card(
         "A14:B14",
         "A15:B16",
@@ -388,13 +381,13 @@ def render_quarterly_nowcast_sheet(
         "G17:H17",
         "Couverture moyenne",
         _raw_lookup_formula("avg_coverage_ratio", fallback="0"),
-        "Profondeur moyenne du panel observé",
+        '="Jours observes : "&' + _raw_lookup_expr("observed_days", fallback='"0"'),
         blue_section,
         note_fill=soft_blue,
         value_format="0.0%",
     )
 
-    write_box("A19:F19", "Lecture du modèle", fill=navy, font_color=white, size=11, bold=True)
+    write_box("A19:F19", "Lecture du modele", fill=navy, font_color=white, size=11, bold=True)
     write_box(
         "A20:F23",
         _ai_or_lookup_formula(model_text, "model_summary_text"),
@@ -403,38 +396,14 @@ def render_quarterly_nowcast_sheet(
         size=11,
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
-    write_box("G19:H19", "Cadence du trimestre", fill=blue_section, font_color=white, size=10, bold=True)
+    write_box("G19:H19", "Pourquoi cette confiance", fill=blue_section, font_color=white, size=10, bold=True)
     write_box(
-        "G20:H20",
-        '="Jours observés : "&' + _raw_lookup_expr("observed_days", fallback='"0"'),
-        fill=light_label,
-        font_color=muted,
-        size=9,
-        bold=True,
-    )
-    write_box(
-        "G21:H21",
-        '="Score : "&IFERROR(TEXT(' + _raw_lookup_expr("quarter_signal_score", fallback="0") + ', "0.0")&"/100","N/D")',
-        fill=paper,
+        "G20:H23",
+        _raw_lookup_formula("confidence_context_text"),
+        fill=soft_slate,
         font_color=ink,
-        size=14,
-        bold=True,
-    )
-    write_box(
-        "G22:H22",
-        '="Taux utilisateurs actifs : "&IFERROR(TEXT(' + _raw_lookup_expr("avg_active_rate", fallback="0") + ', "0.0%"),"N/D")',
-        fill=light_label,
-        font_color=muted,
-        size=9,
-        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
-    )
-    write_box(
-        "G23:H23",
-        '="Snapshot : "&' + _raw_lookup_expr("snapshot_status_label"),
-        fill=light_label,
-        font_color=muted,
-        size=9,
-        align=Alignment(horizontal="center", vertical="center", wrap_text=True),
+        size=10,
+        align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
     write_box("A25:D25", "Moteurs principaux", fill=green, font_color=white, size=11, bold=True)
@@ -456,12 +425,12 @@ def render_quarterly_nowcast_sheet(
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
-    next_step = readiness.get("next_step") or "Compléter les labels trimestriels avant calibration supervisée."
+    next_step = readiness.get("next_step") or "Completer les labels trimestriels avant calibration supervisee."
     model_rows = [
-        ("Snapshot sélectionné", _raw_lookup_formula("snapshot_status_label")),
+        ("Snapshot selectionne", _raw_lookup_formula("snapshot_status_label")),
         ("Date du snapshot", _raw_lookup_formula("snapshot_as_of_date")),
         (
-            "Référence guidance revenus",
+            "Reference guidance revenus",
             '=IFERROR(IF('
             + _raw_lookup_expr("revenue_guidance_reference_musd", fallback="0")
             + '>0, TEXT('
@@ -472,11 +441,11 @@ def render_quarterly_nowcast_sheet(
             + _raw_lookup_expr("revenue_guidance_reference_quarter", fallback='""')
             + '&")",""), "N/D"), "N/D")',
         ),
-        ("Modèle supervisé prêt", "Oui" if readiness.get("supervised_ready") else "Non"),
-        ("Étape suivante", next_step),
+        ("Modele supervise pret", "Oui" if readiness.get("supervised_ready") else "Non"),
+        ("Etape suivante", next_step),
     ]
 
-    write_box("A31:H31", "Cadre du modèle", fill=navy, font_color=white, size=11, bold=True)
+    write_box("A31:H31", "Cadre du modele", fill=navy, font_color=white, size=11, bold=True)
     row_cursor = 32
     for label, value in model_rows:
         row_fill = soft_slate if row_cursor % 2 == 0 else paper
@@ -494,17 +463,13 @@ def render_quarterly_nowcast_sheet(
         value_cell.border = thin_border
         for merged_col in range(3, 9):
             ws.cell(row=row_cursor, column=merged_col).border = thin_border
-            ws.cell(row=row_cursor, column=merged_col).fill = PatternFill(
-                start_color=row_fill,
-                end_color=row_fill,
-                fill_type="solid",
-            )
+            ws.cell(row=row_cursor, column=merged_col).fill = PatternFill(start_color=row_fill, end_color=row_fill, fill_type="solid")
         row_cursor += 1
 
     history_header_row = row_cursor + 1
     write_box(
         f"A{history_header_row}:H{history_header_row}",
-        "Historique trimestriel figé",
+        "Historique trimestriel fige",
         fill=blue_section,
         font_color=white,
         size=11,
@@ -549,24 +514,24 @@ def render_quarterly_nowcast_sheet(
             cell.border = thin_border
             cell.font = Font(name=base_font_name, size=10, color=ink)
             cell.alignment = center_align
-            if col_idx == 4 and isinstance(value, numbers.Number):
+            if col_idx == 4 and isinstance(value, (int, float)):
                 cell.number_format = "0.0"
-            elif col_idx in {5, 6, 7} and isinstance(value, numbers.Number):
+            elif col_idx in {5, 6, 7} and isinstance(value, (int, float)):
                 cell.number_format = "0.0%"
-            elif col_idx == 8 and isinstance(value, numbers.Number):
+            elif col_idx == 8 and isinstance(value, (int, float)):
                 cell.number_format = "#,##0"
         row_cursor += 1
 
     assumptions_row = row_cursor + 1
     write_box(
         f"A{assumptions_row}:H{assumptions_row}",
-        "Hypothèses",
+        "Hypotheses",
         fill=blue_section,
         font_color=white,
         size=11,
         bold=True,
     )
-    assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothèse spécifique."
+    assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothese specifique."
     write_box(
         f"A{assumptions_row + 1}:H{assumptions_row + 4}",
         assumptions_text,
@@ -583,7 +548,7 @@ def render_quarterly_nowcast_sheet(
     ws.row_dimensions[8].height = 34
     ws.row_dimensions[9].height = 22
     ws.row_dimensions[10].height = 22
-    ws.row_dimensions[11].height = 24
+    ws.row_dimensions[11].height = 22
     ws.row_dimensions[13].height = 24
     ws.row_dimensions[14].height = 22
     ws.row_dimensions[15].height = 26
@@ -591,7 +556,7 @@ def render_quarterly_nowcast_sheet(
     ws.row_dimensions[17].height = 24
     ws.row_dimensions[19].height = 24
     for row_idx in range(20, 24):
-        ws.row_dimensions[row_idx].height = 28
+        ws.row_dimensions[row_idx].height = 34
     ws.row_dimensions[25].height = 24
     for row_idx in range(26, 30):
         ws.row_dimensions[row_idx].height = 28

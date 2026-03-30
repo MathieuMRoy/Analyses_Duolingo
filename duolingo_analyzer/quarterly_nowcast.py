@@ -219,6 +219,43 @@ def _build_snapshot_summary_text(snapshot: dict[str, object]) -> str:
     )
 
 
+def _build_confidence_context_text(snapshot: dict[str, object]) -> str:
+    confidence_label = str(snapshot.get("confidence_level") or "Faible")
+    observed_days = int(_safe_float(snapshot.get("observed_days")) or 0)
+    coverage_ratio = _safe_float(snapshot.get("avg_coverage_ratio"))
+    guidance_reference = _safe_float(snapshot.get("revenue_guidance_reference_musd"))
+    snapshot_locked = bool(snapshot.get("snapshot_locked"))
+
+    coverage_text = _format_pct_text(coverage_ratio)
+    if confidence_label == "Elevee":
+        first_sentence = (
+            f"Confiance elevee : {observed_days} jours observes et une couverture moyenne de {coverage_text} donnent une lecture deja dense."
+        )
+    elif confidence_label == "Moyenne":
+        first_sentence = (
+            f"Confiance moyenne : {observed_days} jours observes et une couverture moyenne de {coverage_text} suffisent pour lire la direction, pas encore pour surinterpreter le signal."
+        )
+    else:
+        first_sentence = (
+            f"Confiance faible : le trimestre reste encore jeune ({observed_days} jours observes) meme si la couverture moyenne atteint {coverage_text}."
+        )
+
+    second_parts: list[str] = []
+    if guidance_reference is not None:
+        second_parts.append(
+            f"Le guidance revenus ({_format_number_text(guidance_reference, 1)} M$) donne deja un point de comparaison exploitable"
+        )
+    else:
+        second_parts.append("Le benchmark guidance revenus reste encore incomplet")
+
+    if snapshot_locked:
+        second_parts.append("le snapshot est fige")
+    else:
+        second_parts.append("le signal peut encore bouger jusqu'a la cloture du trimestre")
+
+    return first_sentence + " " + ", et ".join(second_parts) + "."
+
+
 def _format_estimation_note(estimate: float | None, benchmark: float | None, *, prefix: str, benchmark_label: str) -> str:
     if estimate is None and benchmark is None:
         return "N/D"
@@ -665,6 +702,7 @@ def _build_snapshot_for_quarter(
         "main_drivers": drivers[:4],
         "main_risks": risks[:4],
         "model_summary_text": "",
+        "confidence_context_text": "",
         "snapshot_as_of_date": None,
         "snapshot_locked": False,
         "snapshot_status_label": "En cours",
@@ -786,6 +824,7 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
             "main_drivers_text": "\n".join(f"- {item}" for item in drivers),
             "main_risks_text": "\n".join(f"- {item}" for item in risks),
             "model_summary_text": snapshot.get("model_summary_text") or _build_snapshot_summary_text(snapshot),
+            "confidence_context_text": snapshot.get("confidence_context_text") or _build_confidence_context_text(snapshot),
             "revenue_note_text": _format_estimation_note(
                 estimated_revenue,
                 revenue_reference,
@@ -921,6 +960,7 @@ def _merge_saved_and_live_snapshots(live_df: pd.DataFrame, reference_ts: pd.Time
         selected["main_drivers"] = _parse_list(selected.get("main_drivers"))
         selected["main_risks"] = _parse_list(selected.get("main_risks"))
         selected["model_summary_text"] = _build_snapshot_summary_text(selected)
+        selected["confidence_context_text"] = _build_confidence_context_text(selected)
         merged_rows.append(selected)
 
     if not merged_rows:
@@ -984,6 +1024,7 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
         "estimated_next_q_guidance_musd": current_snapshot.get("estimated_next_q_guidance_musd"),
         "main_drivers": current_snapshot.get("main_drivers", []),
         "main_risks": current_snapshot.get("main_risks", []),
+        "confidence_context_text": current_snapshot.get("confidence_context_text") or _build_confidence_context_text(current_snapshot),
     }
 
     package: dict[str, object] = {

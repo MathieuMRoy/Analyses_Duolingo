@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
+import requests
 
 from .config import BASE_DIR, REPORT_DIR
 
@@ -37,6 +38,13 @@ DEFAULT_LATEST_FINANCIAL_CONTEXT = {
     "total_debt_musd": 0.0,
 }
 
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/DUOL"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
 
 def _safe_float(value: object) -> float | None:
     if value is None or value == "":
@@ -56,6 +64,52 @@ def _round_or_none(value: float | None, digits: int = 4) -> float | None:
     if value is None or pd.isna(value):
         return None
     return round(float(value), digits)
+
+
+def _fetch_current_share_price() -> dict[str, object]:
+    try:
+        response = requests.get(
+            YAHOO_CHART_URL,
+            params={"range": "5d", "interval": "1d"},
+            headers={"User-Agent": USER_AGENT},
+            timeout=8,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception:
+        return {"current_price": None, "market_source": None, "market_timestamp": None}
+
+    result = (((payload or {}).get("chart") or {}).get("result") or [None])[0] or {}
+    meta = result.get("meta") or {}
+    timestamp_values = result.get("timestamp") or []
+    indicators = (((result.get("indicators") or {}).get("quote") or [None])[0] or {})
+    closes = indicators.get("close") or []
+
+    current_price = _safe_float(meta.get("regularMarketPrice"))
+    if current_price is None:
+        valid_closes = [_safe_float(value) for value in closes]
+        valid_closes = [value for value in valid_closes if value is not None]
+        if valid_closes:
+            current_price = valid_closes[-1]
+
+    market_timestamp = None
+    regular_market_time = meta.get("regularMarketTime")
+    if regular_market_time:
+        try:
+            market_timestamp = pd.to_datetime(int(regular_market_time), unit="s").strftime("%Y-%m-%d")
+        except Exception:
+            market_timestamp = None
+    elif timestamp_values:
+        try:
+            market_timestamp = pd.to_datetime(int(timestamp_values[-1]), unit="s").strftime("%Y-%m-%d")
+        except Exception:
+            market_timestamp = None
+
+    return {
+        "current_price": _round_or_none(current_price, 2),
+        "market_source": "Yahoo Finance",
+        "market_timestamp": market_timestamp,
+    }
 
 
 def _load_labels_df() -> pd.DataFrame:
@@ -378,6 +432,8 @@ def build_dcf_valuation_package(
 
     estimated_revenue_musd = _safe_float(current_snapshot.get("estimated_revenue_musd"))
     estimated_ebitda_musd = _safe_float(current_snapshot.get("estimated_ebitda_musd"))
+    market_context = _fetch_current_share_price()
+    current_share_price = _safe_float(market_context.get("current_price"))
 
     package: dict[str, object] = {
         "metadata": {
@@ -416,6 +472,12 @@ def build_dcf_valuation_package(
             "previous_year_adjusted_ebitda_musd": _round_or_none(previous_year_ebitda, 1),
             "implied_fy_growth_rate": _round_or_none(fy_growth_assumption, 4),
         },
+        "market_context": {
+            "current_share_price": _round_or_none(current_share_price, 2),
+            "market_source": market_context.get("market_source"),
+            "market_timestamp": market_context.get("market_timestamp"),
+            "upside_downside_pct": None,
+        },
         "sensitivity": {
             "wacc_values": [round(value, 4) for value in [wacc - 0.01, wacc, wacc + 0.01]],
             "terminal_values": [round(value, 4) for value in [0.02, terminal_growth, 0.04]],
@@ -424,6 +486,7 @@ def build_dcf_valuation_package(
             "La base de revenus s'appuie sur les trois derniers trimestres publies et le trimestre en cours estime par le nowcast.",
             "Le FCF de base applique la marge de free cash flow observee sur le dernier exercice annualise disponible.",
             "La croissance annuelle part de la guidance FY du management quand elle est disponible, avec des bornes de prudence.",
+            "Le cours actuel sert uniquement a lire un upside ou downside implicite; la DCF reste une valorisation sous hypotheses.",
             "La valorisation reste une lecture sous hypotheses, a completer par la sensibilite WACC / croissance terminale.",
         ],
     }

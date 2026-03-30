@@ -1,5 +1,7 @@
 """Renderer de la feuille Signaux Financiers."""
 
+from __future__ import annotations
+
 import numbers
 import re
 
@@ -37,15 +39,16 @@ def render_financial_nowcast_sheet(
     panel = signal_package.get("panel", {})
     business = signal_package.get("business_signals", {})
     daily = signal_package.get("daily_comparison", {})
+    horizon = signal_package.get("horizon_context", {})
     proxy = signal_package.get("financial_proxy_signals", {})
     assumptions = signal_package.get("assumptions", [])
+
     ai_sections = {
         "RESUME": None,
         "TENDANCES": None,
         "ATTENTION": None,
         "CONSEILS": None,
     }
-
     if ia_report:
         for key in ai_sections.keys():
             match = re.search(rf"\[{key}\](.*?)(?=\[|$)", ia_report, re.DOTALL)
@@ -53,7 +56,6 @@ def render_financial_nowcast_sheet(
                 ai_sections[key] = match.group(1).strip()
 
     duo_green = styles["DUO_GREEN"]
-    duo_blue = styles["DUO_BLUE"]
     navy = styles["NAVY"]
     light_grey = styles["LIGHT_GREY"]
     white = styles["WHITE"]
@@ -127,13 +129,13 @@ def render_financial_nowcast_sheet(
     target_users = panel.get("target_panel_size")
     premium_net_adds_today = daily.get("premium_net_adds_today")
 
-    drivers = proxy.get("main_drivers") or ["Aucun driver majeur identifié pour l'instant."]
-    risks = proxy.get("main_risks") or ["Aucun risque majeur identifié pour l'instant."]
+    drivers = proxy.get("main_drivers") or ["Aucun driver majeur identifie pour l'instant."]
+    risks = proxy.get("main_risks") or ["Aucun risque majeur identifie pour l'instant."]
 
     lead_text = (
         f"Signal {bias_label.lower()} avec confiance {confidence_label.lower()}. "
-        f"La monétisation ressort à {pretty_score(proxy.get('monetization_momentum_index'))}, "
-        f"tandis que la qualité d'engagement atteint {pretty_score(proxy.get('engagement_quality_index'))}."
+        f"La monetisation ressort a {pretty_score(proxy.get('monetization_momentum_index'))}, "
+        f"tandis que la qualite d'engagement atteint {pretty_score(proxy.get('engagement_quality_index'))}."
     )
     if ai_sections["RESUME"]:
         lead_text = ai_sections["RESUME"]
@@ -163,9 +165,21 @@ def render_financial_nowcast_sheet(
 
     closing_text = compact_summary_text(
         ai_sections["CONSEILS"]
-        or "Le signal du jour doit surtout être lu comme un briefing de tendance : on surveille la qualité d'engagement, la pression de churn et la dynamique premium.",
+        or "Le signal du jour doit surtout etre lu comme un briefing de tendance : on surveille la qualite d'engagement, la pression de churn et la dynamique premium.",
         max_sentences=2,
         max_chars=180,
+        separator="\n",
+    )
+    week_text = compact_summary_text(
+        (horizon.get("seven_day") or {}).get("summary_text"),
+        max_sentences=2,
+        max_chars=220,
+        separator="\n",
+    )
+    month_text = compact_summary_text(
+        (horizon.get("thirty_day") or {}).get("summary_text"),
+        max_sentences=2,
+        max_chars=220,
         separator="\n",
     )
 
@@ -181,8 +195,8 @@ def render_financial_nowcast_sheet(
     }.get(confidence_label, calm_blue)
 
     summary_line = (
-        f"Date de référence : {metadata.get('as_of_date', 'N/D')} | "
-        f"Panel observé : {pretty_fr_number(observed_users, 0)} / {pretty_fr_number(target_users, 0)} "
+        f"Date de reference : {metadata.get('as_of_date', 'N/D')} | "
+        f"Panel observe : {pretty_fr_number(observed_users, 0)} / {pretty_fr_number(target_users, 0)} "
         f"({pretty_ratio_pct(coverage_ratio, 1)}) | "
         f"Signal : {bias_label} | Confiance : {confidence_label}"
     )
@@ -221,7 +235,7 @@ def render_financial_nowcast_sheet(
     )
     write_box(
         "F8:H8",
-        f"{pretty_fr_number(observed_users, 0)} profils observés",
+        f"{pretty_fr_number(observed_users, 0)} profils observes",
         fill=soft_blue,
         font_color=ink,
         size=10,
@@ -248,14 +262,14 @@ def render_financial_nowcast_sheet(
     write_strip(
         "A13:B13",
         "A14:B15",
-        "Monétisation",
+        "Monetisation",
         pretty_score(proxy.get("monetization_momentum_index")),
         title_fill=sea,
         value_fill=soft_green,
     )
     write_box(
         "A16:B16",
-        "Indice composite de monétisation",
+        "Indice composite de monetisation",
         fill=canvas,
         font_color=muted,
         size=9,
@@ -272,7 +286,7 @@ def render_financial_nowcast_sheet(
     )
     write_box(
         "C16:D16",
-        "Qualité d'engagement récente",
+        "Qualite d'engagement recente",
         fill=canvas,
         font_color=muted,
         size=9,
@@ -289,7 +303,7 @@ def render_financial_nowcast_sheet(
     )
     write_box(
         "E16:F16",
-        "Variation récente du taux Super",
+        "Variation recente du taux Super",
         fill=canvas,
         font_color=muted,
         size=9,
@@ -309,15 +323,15 @@ def render_financial_nowcast_sheet(
     )
     write_box(
         "G16:H16",
-        "Pression récente sur l'abandon",
+        "Pression recente sur l'abandon",
         fill=canvas,
         font_color=muted,
         size=9,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
 
-    write_box("A18:D18", "Ce qui s'améliore", fill=duo_green, font_color=white, size=11, bold=True)
-    write_box("E18:H18", "Ce qui se dégrade", fill=risk, font_color=white, size=11, bold=True)
+    write_box("A18:D18", "Ce qui s'ameliore", fill=duo_green, font_color=white, size=11, bold=True)
+    write_box("E18:H18", "Ce qui se degrade", fill=risk, font_color=white, size=11, bold=True)
     write_box(
         "A19:D23",
         trend_text,
@@ -335,9 +349,28 @@ def render_financial_nowcast_sheet(
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
-    write_box("A25:H25", "Conclusion opérationnelle", fill=deep_teal, font_color=white, size=11, bold=True)
+    write_box("A25:D25", "Lecture 7 jours", fill=navy, font_color=white, size=11, bold=True)
+    write_box("E25:H25", "Lecture 30 jours", fill=calm_blue, font_color=white, size=11, bold=True)
     write_box(
-        "A26:H28",
+        "A26:D28",
+        week_text,
+        fill=soft_slate,
+        font_color=ink,
+        size=10,
+        align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+    )
+    write_box(
+        "E26:H28",
+        month_text,
+        fill=soft_blue,
+        font_color=ink,
+        size=10,
+        align=Alignment(horizontal="left", vertical="top", wrap_text=True),
+    )
+
+    write_box("A30:H30", "Conclusion operationnelle", fill=deep_teal, font_color=white, size=11, bold=True)
+    write_box(
+        "A31:H33",
         closing_text,
         fill=canvas,
         font_color=ink,
@@ -345,22 +378,22 @@ def render_financial_nowcast_sheet(
         align=Alignment(horizontal="left", vertical="top", wrap_text=True),
     )
 
-    write_box("A30:H30", "Diagnostics du modèle", fill=navy, font_color=white, size=11, bold=True)
+    write_box("A35:H35", "Diagnostics du modele", fill=navy, font_color=white, size=11, bold=True)
     model_rows = [
-        ("Réactivation 7j", pretty_delta_pts(proxy.get("reactivation_trend_7d"))),
-        ("Rétention high-value", pretty_delta_pts(proxy.get("high_value_retention_trend"))),
+        ("Reactivation 7j", pretty_delta_pts(proxy.get("reactivation_trend_7d"))),
+        ("Retention high-value", pretty_delta_pts(proxy.get("high_value_retention_trend"))),
         ("Super rate", pretty_ratio_pct(business.get("super_rate"), 1)),
-        ("Progression Débutants -> Standard", pretty_ratio_pct(business.get("debutants_to_standard_rate"), 1)),
-        ("Abandon Débutants", pretty_ratio_pct(business.get("debutants_abandon_rate"), 1)),
+        ("Progression Debutants -> Standard", pretty_ratio_pct(business.get("debutants_to_standard_rate"), 1)),
+        ("Abandon Debutants", pretty_ratio_pct(business.get("debutants_abandon_rate"), 1)),
         ("Abandon Standard", pretty_ratio_pct(business.get("standard_abandon_rate"), 1)),
         ("Abandon Super-Actifs", pretty_ratio_pct(business.get("super_actifs_abandon_rate"), 1)),
         (
             "Readiness",
-            "Lecture quotidienne prête; les probabilités trimestrielles se lisent désormais dans l'onglet Nowcast Trimestriel.",
+            "Lecture quotidienne prete; les probabilites trimestrielles se lisent desormais dans l'onglet Nowcast Trimestriel.",
         ),
     ]
 
-    row_cursor = 31
+    row_cursor = 36
     for label, value in model_rows:
         row_fill = zebra_fill if row_cursor % 2 == 1 else white_fill
         ws[f"A{row_cursor}"] = label
@@ -381,8 +414,8 @@ def render_financial_nowcast_sheet(
         row_cursor += 1
 
     hypotheses_row = row_cursor + 1
-    write_box("A{}:H{}".format(hypotheses_row, hypotheses_row), "Hypothèses & notes", fill=navy, font_color=white, size=11, bold=True)
-    assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothèse spécifique."
+    write_box(f"A{hypotheses_row}:H{hypotheses_row}", "Hypotheses & notes", fill=navy, font_color=white, size=11, bold=True)
+    assumptions_text = "\n".join(f"- {item}" for item in assumptions) if assumptions else "- Aucune hypothese specifique."
     write_box(
         f"A{hypotheses_row + 1}:H{hypotheses_row + 4}",
         assumptions_text,
@@ -405,11 +438,13 @@ def render_financial_nowcast_sheet(
     for row_idx in range(19, 24):
         ws.row_dimensions[row_idx].height = 34
     ws.row_dimensions[25].height = 24
-    ws.row_dimensions[26].height = 32
-    ws.row_dimensions[27].height = 32
-    ws.row_dimensions[28].height = 32
+    for row_idx in range(26, 29):
+        ws.row_dimensions[row_idx].height = 32
     ws.row_dimensions[30].height = 24
-    for row_idx in range(31, row_cursor):
+    for row_idx in range(31, 34):
+        ws.row_dimensions[row_idx].height = 30
+    ws.row_dimensions[35].height = 24
+    for row_idx in range(36, row_cursor):
         ws.row_dimensions[row_idx].height = 22
     for row_idx in range(hypotheses_row + 1, hypotheses_row + 5):
         ws.row_dimensions[row_idx].height = 22
