@@ -229,15 +229,15 @@ def _build_confidence_context_text(snapshot: dict[str, object]) -> str:
     coverage_text = _format_pct_text(coverage_ratio)
     if confidence_label == "Elevee":
         first_sentence = (
-            f"Confiance elevee : {observed_days} jours observes et une couverture moyenne de {coverage_text} donnent une lecture deja dense."
+            f"Confiance elevee : {observed_days} jours de nowcast observes et une couverture moyenne de {coverage_text} donnent une lecture deja dense."
         )
     elif confidence_label == "Moyenne":
         first_sentence = (
-            f"Confiance moyenne : {observed_days} jours observes et une couverture moyenne de {coverage_text} suffisent pour lire la direction, pas encore pour surinterpreter le signal."
+            f"Confiance moyenne : {observed_days} jours de nowcast observes et une couverture moyenne de {coverage_text} suffisent pour lire la direction, pas encore pour surinterpreter le signal."
         )
     else:
         first_sentence = (
-            f"Confiance faible : le trimestre reste encore jeune ({observed_days} jours observes) meme si la couverture moyenne atteint {coverage_text}."
+            f"Confiance faible : le trimestre reste encore jeune ({observed_days} jours de nowcast observes) meme si la couverture moyenne atteint {coverage_text}."
         )
 
     second_parts: list[str] = []

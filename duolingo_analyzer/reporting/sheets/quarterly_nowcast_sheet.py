@@ -220,7 +220,7 @@ def render_quarterly_nowcast_sheet(
         + '&" | Trimestre affiche : "&$C$4'
         + '&" | Statut : "&'
         + _raw_lookup_expr("snapshot_status_label")
-        + '&" | Jours observes : "&'
+        + '&" | Jours nowcast : "&'
         + _raw_lookup_expr("observed_days", fallback='"0"')
         + '&" | Couverture moyenne : "&IFERROR(TEXT('
         + _raw_lookup_expr("avg_coverage_ratio", fallback="0")
