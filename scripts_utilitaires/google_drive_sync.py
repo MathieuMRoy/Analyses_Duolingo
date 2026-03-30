@@ -96,13 +96,21 @@ def _upload_file(service, folder_id: str, local_path: Path, remote_name: str) ->
         print(f"[Drive] Mise a jour : {remote_name}")
         return
 
-    service.files().create(
-        body={"name": remote_name, "parents": [folder_id]},
-        media_body=media,
-        fields="id,name",
-        supportsAllDrives=True,
-    ).execute()
-    print(f"[Drive] Creation : {remote_name}")
+    try:
+        service.files().create(
+            body={"name": remote_name, "parents": [folder_id]},
+            media_body=media,
+            fields="id,name",
+            supportsAllDrives=True,
+        ).execute()
+        print(f"[Drive] Creation : {remote_name}")
+    except Exception as exc:
+        print(
+            f"[Drive] Fichier distant absent, creation ignoree : {remote_name} | "
+            f"Le service account ne peut pas creer ce fichier automatiquement ({exc}). "
+            "Creez-le une seule fois manuellement dans le dossier Drive, puis les prochaines "
+            "executions pourront le mettre a jour."
+        )
 
 
 def pull_files() -> None:
