@@ -295,46 +295,119 @@ def _extract_socialblade_metric(page_text: str | None, metric_name: str) -> floa
 
 
 def _collect_instagram_followers(as_of_date: date) -> SignalReading | None:
-    page_text = _fetch_socialblade_page("https://socialblade.com/instagram/user/duolingo")
-    value = _extract_socialblade_metric(page_text, "followers")
+    page_text = _safe_get_text("https://www.instagram.com/duolingo/")
+    value = None
+    source = "Instagram public"
+    notes = "Audience Instagram publique de Duolingo."
+
+    if page_text:
+        patterns = [
+            r'"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)',
+            r'content="([\d.,]+[KMB]?) Followers,\s*[\d.,]+ Following,\s*[\d.,]+ Posts',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, page_text, flags=re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            if "Followers," in pattern:
+                value = _parse_compact_number(match.group(1))
+                source = "Instagram public"
+                notes = "Audience Instagram publique de Duolingo, lue depuis la meta description publique (valeur arrondie)."
+            else:
+                value = _clean_numeric(match.group(1))
+            if value is not None:
+                break
+
+    if value is None:
+        page_text = _fetch_socialblade_page("https://socialblade.com/instagram/user/duolingo")
+        value = _extract_socialblade_metric(page_text, "followers")
+        source = "SocialBlade / Instagram"
+        notes = "Audience Instagram publique de Duolingo via fallback externe."
+
     if value is None:
         return None
     return SignalReading(
         signal_key="instagram_followers",
         signal_label="Instagram Followers",
         value=value,
-        source="SocialBlade / Instagram",
-        notes="Audience Instagram publique de Duolingo.",
+        source=source,
+        notes=notes,
         sort_order=6,
     )
 
 
 def _collect_tiktok_followers(as_of_date: date) -> SignalReading | None:
-    page_text = _fetch_socialblade_page("https://socialblade.com/tiktok/user/duolingo")
-    value = _extract_socialblade_metric(page_text, "followers")
+    page_text = _safe_get_text("https://www.tiktok.com/@duolingo")
+    value = None
+
+    if page_text:
+        patterns = [
+            r'"statsV2"\s*:\s*\{[^}]*"followerCount"\s*:\s*"(\d+)"',
+            r'"stats"\s*:\s*\{[^}]*"followerCount"\s*:\s*(\d+)',
+            r'@duolingo\s+([\d.,]+[KMB]?)\s+Followers',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, page_text, flags=re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            if pattern.endswith("Followers"):
+                value = _parse_compact_number(match.group(1))
+            else:
+                value = _clean_numeric(match.group(1))
+            if value is not None:
+                break
+
+    if value is None:
+        page_text = _fetch_socialblade_page("https://socialblade.com/tiktok/user/duolingo")
+        value = _extract_socialblade_metric(page_text, "followers")
+
     if value is None:
         return None
     return SignalReading(
         signal_key="tiktok_followers",
         signal_label="TikTok Followers",
         value=value,
-        source="SocialBlade / TikTok",
-        notes="Audience TikTok publique de Duolingo.",
+        source="TikTok public",
+        notes="Audience TikTok publique de Duolingo, lue sur la page officielle avec fallback si necessaire.",
         sort_order=7,
     )
 
 
 def _collect_youtube_subscribers(as_of_date: date) -> SignalReading | None:
-    page_text = _fetch_socialblade_page("https://socialblade.com/youtube/handle/duolingo")
-    value = _extract_socialblade_metric(page_text, "subscribers")
+    page_text = _safe_get_text("https://www.youtube.com/@duolingo")
+    value = None
+    source = "YouTube public"
+    notes = "Abonnes YouTube publics de Duolingo."
+
+    if page_text:
+        patterns = [
+            r'"subscriberCountText"\s*:\s*\{.*?"simpleText"\s*:\s*"([\d.,]+[KMB]?)\s+subscribers"',
+            r'"ownerChannelName":"Duolingo".*?"subscriberCountText"\s*:\s*\{.*?"simpleText"\s*:\s*"([\d.,]+[KMB]?)\s+subscribers"',
+            r'content="[^"]*?([\d.,]+[KMB]?)\s+subscribers[^"]*?"\s+itemprop="description"',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, page_text, flags=re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            value = _parse_compact_number(match.group(1))
+            if value is not None:
+                notes = "Abonnes YouTube publics de Duolingo, lus sur la page officielle (valeur potentiellement arrondie)."
+                break
+
+    if value is None:
+        page_text = _fetch_socialblade_page("https://socialblade.com/youtube/handle/duolingo")
+        value = _extract_socialblade_metric(page_text, "subscribers")
+        source = "SocialBlade / YouTube"
+        notes = "Abonnes YouTube publics de Duolingo via fallback externe."
+
     if value is None:
         return None
     return SignalReading(
         signal_key="youtube_subscribers",
         signal_label="YouTube Subscribers",
         value=value,
-        source="SocialBlade / YouTube",
-        notes="Abonnes YouTube publics de Duolingo.",
+        source=source,
+        notes=notes,
         sort_order=8,
     )
 
@@ -513,8 +586,17 @@ def _build_latest_signal_rows(history_df: pd.DataFrame) -> list[dict[str, object
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df = df.dropna(subset=["snapshot_date", "signal_key"])
 
+    latest_snapshot = df["snapshot_date"].max()
+    if pd.isna(latest_snapshot):
+        return []
+
+    current_snapshot_df = df[df["snapshot_date"] == latest_snapshot].copy()
+    current_keys = set(current_snapshot_df["signal_key"].dropna().astype(str))
+
     rows: list[dict[str, object]] = []
     for signal_key, group in df.groupby("signal_key", sort=False):
+        if str(signal_key) not in current_keys:
+            continue
         group = group.sort_values(["week_start", "snapshot_date"])
         current_row = group.iloc[-1]
         previous_group = group[group["week_start"] < current_row["week_start"]]
