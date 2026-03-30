@@ -1,5 +1,6 @@
 sort_order,signal_label,value,source,notes,enabled
-101,Google Trends (manuel),,Google Trends,Renseigner manuellement si vous suivez cet indice gratuitement.,1
-102,Web Traffic (manuel),,Traffic data,Renseigner manuellement si vous disposez d'une source trafic fiable.,1
-103,Instagram Followers (manuel),,Instagram,Renseigner manuellement si vous souhaitez suivre la croissance sociale.,0
-104,Threads Followers (manuel),,Threads,Renseigner manuellement si utile.,0
+101,Web Traffic (manuel),,Traffic data,Renseigner manuellement si vous disposez d'une source trafic fiable.,1
+102,Instagram Followers (manuel),,Instagram,Renseigner manuellement si vous souhaitez suivre la croissance sociale.,0
+103,Threads Followers (manuel),,Threads,Renseigner manuellement si utile.,0
+104,Stocktwits Mentions (manuel),,Stocktwits,Renseigner manuellement si vous suivez le flux investisseur retail.,0
+105,Employee Rating (manuel),,Employer reviews,Renseigner manuellement si vous souhaitez suivre le moral employe.,0

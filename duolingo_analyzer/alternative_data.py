@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -17,6 +18,11 @@ import pandas as pd
 import requests
 
 from .config import ALTERNATIVE_DATA_HISTORY_FILE, ALTERNATIVE_DATA_INPUT_FILE
+
+try:
+    from pytrends.request import TrendReq
+except Exception:  # pragma: no cover - optional dependency at runtime
+    TrendReq = None
 
 
 HTTP_TIMEOUT = 8
@@ -130,6 +136,31 @@ def _clean_numeric(value: object) -> float | None:
         return None
 
 
+def _parse_compact_number(text: str | None) -> float | None:
+    if text is None:
+        return None
+
+    raw = str(text).strip().upper().replace(",", "").replace(" ", "")
+    if not raw:
+        return None
+
+    multiplier = 1.0
+    if raw.endswith("K"):
+        multiplier = 1_000.0
+        raw = raw[:-1]
+    elif raw.endswith("M"):
+        multiplier = 1_000_000.0
+        raw = raw[:-1]
+    elif raw.endswith("B"):
+        multiplier = 1_000_000_000.0
+        raw = raw[:-1]
+
+    try:
+        return float(raw) * multiplier
+    except ValueError:
+        return None
+
+
 def _format_fr_number(value: float | None, decimals: int = 0) -> str:
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return "N/D"
@@ -170,6 +201,11 @@ def _safe_get_text(url: str, *, params: dict[str, object] | None = None) -> str 
         return None
 
 
+@lru_cache(maxsize=8)
+def _fetch_socialblade_page(url: str) -> str | None:
+    return _safe_get_text(url)
+
+
 def _collect_greenhouse_job_posts(as_of_date: date) -> SignalReading | None:
     payload = _safe_get_json("https://boards-api.greenhouse.io/v1/boards/duolingo/jobs")
     jobs = payload.get("jobs") if isinstance(payload, dict) else None
@@ -185,39 +221,146 @@ def _collect_greenhouse_job_posts(as_of_date: date) -> SignalReading | None:
     )
 
 
-def _collect_wikipedia_pageviews(as_of_date: date) -> SignalReading | None:
-    start = (as_of_date - timedelta(days=6)).strftime("%Y%m%d")
-    end = as_of_date.strftime("%Y%m%d")
-    url = (
-        "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
-        "en.wikipedia.org/all-access/user/Duolingo/daily/"
-        f"{start}/{end}"
+@lru_cache(maxsize=1)
+def _fetch_ios_lookup() -> dict | None:
+    payload = _safe_get_json(
+        "https://itunes.apple.com/lookup",
+        params={"id": "570060128", "country": "us"},
     )
-    payload = _safe_get_json(url)
-    items = payload.get("items") if isinstance(payload, dict) else None
-    if not isinstance(items, list) or not items:
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list) or not results:
         return None
-    views = [float(item.get("views", 0)) for item in items if item.get("views") is not None]
-    if not views:
+    return results[0]
+
+
+def _collect_google_trends(as_of_date: date) -> SignalReading | None:
+    if TrendReq is None:
         return None
+
+    try:
+        trend = TrendReq(hl="en-US", tz=360)
+        trend.build_payload(["Duolingo"], timeframe="today 3-m")
+        df = trend.interest_over_time()
+    except Exception:
+        return None
+
+    if df is None or df.empty or "Duolingo" not in df.columns:
+        return None
+
+    series = pd.to_numeric(df["Duolingo"], errors="coerce").dropna()
+    if series.empty:
+        return None
+
+    value = float(series.iloc[-1])
     return SignalReading(
-        signal_key="wikipedia_pageviews_7d",
-        signal_label="Wikipedia Pageviews (7j)",
-        value=float(sum(views) / len(views)),
-        source="Wikimedia",
-        notes="Moyenne 7 jours des vues sur la page Wikipedia de Duolingo.",
+        signal_key="google_trends",
+        signal_label="Google Trends",
+        value=value,
+        source="Google Trends",
+        notes="Indice d'interet de recherche Duolingo sur une base 0-100.",
         sort_order=2,
     )
 
 
-def _collect_google_news_mentions(as_of_date: date) -> SignalReading | None:
+def _collect_ios_rating_count(as_of_date: date) -> SignalReading | None:
+    app_data = _fetch_ios_lookup()
+    value = _clean_numeric(app_data.get("userRatingCount")) if isinstance(app_data, dict) else None
+    if value is None:
+        return None
+    return SignalReading(
+        signal_key="ios_rating_count",
+        signal_label="iOS Ratings Count",
+        value=value,
+        source="Apple App Store",
+        notes="Proxy de traction consommateur via le nombre cumule de notes iOS.",
+        sort_order=2,
+    )
+
+
+def _collect_ios_rating_score(as_of_date: date) -> SignalReading | None:
+    app_data = _fetch_ios_lookup()
+    value = _clean_numeric(app_data.get("averageUserRating")) if isinstance(app_data, dict) else None
+    if value is None:
+        return None
+    return SignalReading(
+        signal_key="ios_rating_score",
+        signal_label="iOS Rating",
+        value=value,
+        source="Apple App Store",
+        notes="Note moyenne iOS publique, utile comme proxy faible de satisfaction.",
+        sort_order=3,
+    )
+
+
+def _extract_socialblade_metric(page_text: str | None, metric_name: str) -> float | None:
+    if not page_text:
+        return None
+
+    patterns = [
+        rf"{metric_name}\s*</[^>]+>\s*<[^>]+>\s*([\d.,]+[KMB]?)",
+        rf"{metric_name}\s+([\d.,]+[KMB]?)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, page_text, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            value = _parse_compact_number(match.group(1))
+            if value is not None:
+                return value
+    return None
+
+
+def _collect_instagram_followers(as_of_date: date) -> SignalReading | None:
+    page_text = _fetch_socialblade_page("https://socialblade.com/instagram/user/duolingo")
+    value = _extract_socialblade_metric(page_text, "followers")
+    if value is None:
+        return None
+    return SignalReading(
+        signal_key="instagram_followers",
+        signal_label="Instagram Followers",
+        value=value,
+        source="SocialBlade / Instagram",
+        notes="Audience Instagram publique de Duolingo.",
+        sort_order=6,
+    )
+
+
+def _collect_tiktok_followers(as_of_date: date) -> SignalReading | None:
+    page_text = _fetch_socialblade_page("https://socialblade.com/tiktok/user/duolingo")
+    value = _extract_socialblade_metric(page_text, "followers")
+    if value is None:
+        return None
+    return SignalReading(
+        signal_key="tiktok_followers",
+        signal_label="TikTok Followers",
+        value=value,
+        source="SocialBlade / TikTok",
+        notes="Audience TikTok publique de Duolingo.",
+        sort_order=7,
+    )
+
+
+def _collect_youtube_subscribers(as_of_date: date) -> SignalReading | None:
+    page_text = _fetch_socialblade_page("https://socialblade.com/youtube/handle/duolingo")
+    value = _extract_socialblade_metric(page_text, "subscribers")
+    if value is None:
+        return None
+    return SignalReading(
+        signal_key="youtube_subscribers",
+        signal_label="YouTube Subscribers",
+        value=value,
+        source="SocialBlade / YouTube",
+        notes="Abonnes YouTube publics de Duolingo.",
+        sort_order=8,
+    )
+
+
+def _collect_reddit_mentions(as_of_date: date) -> SignalReading | None:
     xml_text = _safe_get_text(
-        "https://news.google.com/rss/search",
+        "https://www.reddit.com/search.rss",
         params={
-            "q": "Duolingo when:7d",
-            "hl": "en-US",
-            "gl": "US",
-            "ceid": "US:en",
+            "q": "Duolingo",
+            "sort": "new",
+            "t": "week",
         },
     )
     if not xml_text:
@@ -228,47 +371,26 @@ def _collect_google_news_mentions(as_of_date: date) -> SignalReading | None:
     except ET.ParseError:
         return None
 
-    items = root.findall(".//item")
-    return SignalReading(
-        signal_key="google_news_mentions_7d",
-        signal_label="Google News Mentions (7j)",
-        value=float(len(items)),
-        source="Google News RSS",
-        notes="Nombre d'articles Google News remontes sur les 7 derniers jours.",
-        sort_order=3,
-    )
-
-
-def _collect_reddit_mentions(as_of_date: date) -> SignalReading | None:
-    payload = _safe_get_json(
-        "https://www.reddit.com/search.json",
-        params={
-            "q": "Duolingo",
-            "sort": "new",
-            "t": "week",
-            "limit": 100,
-            "raw_json": 1,
-        },
-    )
-    data = payload.get("data") if isinstance(payload, dict) else None
-    children = data.get("children") if isinstance(data, dict) else None
-    if not isinstance(children, list):
-        return None
+    entries = root.findall(".//{http://www.w3.org/2005/Atom}entry")
     return SignalReading(
         signal_key="reddit_mentions_7d",
         signal_label="Reddit Mentions (7j)",
-        value=float(len(children)),
+        value=float(len(entries)),
         source="Reddit",
-        notes="Nombre de posts publics remontes par la recherche Reddit sur 7 jours (echantillon public, max 100).",
-        sort_order=4,
+        notes="Nombre de resultats publics Reddit sur 7 jours via le flux RSS de recherche.",
+        sort_order=5,
     )
 
 
 AUTO_COLLECTORS = [
     _collect_greenhouse_job_posts,
-    _collect_wikipedia_pageviews,
-    _collect_google_news_mentions,
+    _collect_google_trends,
+    _collect_ios_rating_count,
+    _collect_ios_rating_score,
     _collect_reddit_mentions,
+    _collect_instagram_followers,
+    _collect_tiktok_followers,
+    _collect_youtube_subscribers,
 ]
 
 
