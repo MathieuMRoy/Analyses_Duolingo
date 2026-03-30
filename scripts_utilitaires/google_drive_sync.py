@@ -96,10 +96,13 @@ def _upload_file(service, folder_id: str, local_path: Path, remote_name: str) ->
         print(f"[Drive] Mise a jour : {remote_name}")
         return
 
-    print(
-        f"[Drive] Fichier distant absent, creation ignoree : {remote_name} | "
-        "Cree ce fichier une fois manuellement dans le dossier Drive, puis les prochaines executions pourront le mettre a jour."
-    )
+    service.files().create(
+        body={"name": remote_name, "parents": [folder_id]},
+        media_body=media,
+        fields="id,name",
+        supportsAllDrives=True,
+    ).execute()
+    print(f"[Drive] Creation : {remote_name}")
 
 
 def pull_files() -> None:

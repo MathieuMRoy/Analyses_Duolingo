@@ -80,7 +80,8 @@ def render_alternative_data_sheet(
         "A3:F3",
         (
             "Lecture externe du momentum Duolingo. "
-            "Chaque signal est capture quotidiennement puis compare a sa derniere semaine disponible."
+            "Chaque signal gratuit est capture quotidiennement quand la source publique est disponible, "
+            "puis compare a sa derniere semaine observable."
         ),
         fill=canvas,
         font_color=muted,
@@ -121,8 +122,9 @@ def render_alternative_data_sheet(
             "A9:F11",
             (
                 "Aucune donnee alternative exploitable pour le moment.\n"
-                "Renseignez le fichier alternative_data_inputs.csv, puis le pipeline gardera l'historique "
-                "journalier et calculera automatiquement la variation week over week."
+                "Le pipeline tente d'abord de collecter des signaux publics gratuits, puis complete "
+                "avec alternative_data_inputs.csv si vous ajoutez des valeurs manuelles.\n"
+                "Dès qu'une premiere semaine est disponible, la variation week over week se calcule automatiquement."
             ),
             fill=soft_neutral,
             font_color=muted,

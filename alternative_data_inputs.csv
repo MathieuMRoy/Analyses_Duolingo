@@ -1,9 +1,5 @@
 sort_order,signal_label,value,source,notes,enabled
-1,Job Posts,,Careers / ATS,,1
-2,Google Trends,,Google Trends,,1
-3,Web Traffic,,Traffic data,,1
-4,App Downloads,,App intelligence,,1
-5,Reddit Mentions,,Reddit,,1
-6,Stocktwits Mentions,,Stocktwits,,1
-7,Instagram Followers,,Instagram,,1
-8,Threads Followers,,Threads,,1
+101,Google Trends (manuel),,Google Trends,Renseigner manuellement si vous suivez cet indice gratuitement.,1
+102,Web Traffic (manuel),,Traffic data,Renseigner manuellement si vous disposez d'une source trafic fiable.,1
+103,Instagram Followers (manuel),,Instagram,Renseigner manuellement si vous souhaitez suivre la croissance sociale.,0
+104,Threads Followers (manuel),,Threads,Renseigner manuellement si utile.,0
