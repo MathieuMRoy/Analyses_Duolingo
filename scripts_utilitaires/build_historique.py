@@ -5,7 +5,7 @@ import shutil
 import pandas as pd
 from openpyxl import load_workbook
 
-from duolingo_analyzer.config import RAPPORT_EXCEL_FILE, REPORT_DIR
+from duolingo_analyzer.config import REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
 from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from duolingo_analyzer.reporting.workbook_layout import apply_standard_workbook_layout
@@ -32,11 +32,18 @@ def build_historique() -> None:
         print("Aucun rapport journalier trouvé.")
         return
 
-    base_report = RAPPORT_EXCEL_FILE if RAPPORT_EXCEL_FILE.exists() else report_files[-1]
-
-    shutil.copyfile(base_report, HISTO_FILE)
+    if not HISTO_FILE.exists():
+        shutil.copyfile(report_files[-1], HISTO_FILE)
 
     frames: list[pd.DataFrame] = []
+    if HISTO_FILE.exists():
+        try:
+            df_existing = _load_summary_sheet(HISTO_FILE)
+            if df_existing is not None and not df_existing.empty:
+                frames.append(_normalize_summary_df(df_existing))
+        except Exception:
+            pass
+
     for report_path in report_files:
         try:
             df = _load_summary_sheet(report_path)
