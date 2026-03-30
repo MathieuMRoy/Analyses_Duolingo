@@ -5,6 +5,7 @@ from __future__ import annotations
 import numbers
 
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 
 def render_alternative_data_sheet(
@@ -50,6 +51,11 @@ def render_alternative_data_sheet(
 
     metadata = package.get("metadata", {})
     rows = package.get("rows") or []
+    weekly_summary_columns = package.get("weekly_summary_columns") or []
+    weekly_summary_rows = package.get("weekly_summary_rows") or []
+
+    sheet_end_col = max(6, 2 + len(weekly_summary_columns))
+    sheet_end_letter = get_column_letter(sheet_end_col)
 
     def write_box(
         ref: str,
@@ -75,9 +81,9 @@ def render_alternative_data_sheet(
         if number_format:
             cell.number_format = number_format
 
-    write_box("A1:F2", "ALTERNATIVE DATA", fill=title, font_color=white, size=18, bold=True)
+    write_box(f"A1:{sheet_end_letter}2", "ALTERNATIVE DATA", fill=title, font_color=white, size=18, bold=True)
     write_box(
-        "A3:F3",
+        f"A3:{sheet_end_letter}3",
         (
             "Lecture externe du momentum Duolingo. "
             "Chaque signal gratuit est capture quotidiennement quand la source publique est disponible, "
@@ -167,3 +173,74 @@ def render_alternative_data_sheet(
         size=9,
         align=Alignment(horizontal="center", vertical="center", wrap_text=True),
     )
+
+    if not weekly_summary_rows or not weekly_summary_columns:
+        return
+
+    summary_title_row = last_row + 2
+    summary_header_row = summary_title_row + 1
+    summary_data_row = summary_header_row + 1
+    summary_end_letter = get_column_letter(2 + len(weekly_summary_columns))
+
+    write_box(
+        f"A{summary_title_row}:{summary_end_letter}{summary_title_row}",
+        "HISTORIQUE HEBDOMADAIRE",
+        fill=title,
+        font_color=white,
+        size=12,
+        bold=True,
+    )
+
+    summary_headers = [
+        ("A", "Semaine"),
+        ("B", "Jours observes"),
+    ]
+    for index, column in enumerate(weekly_summary_columns, start=3):
+        summary_headers.append((get_column_letter(index), column.get("display_label") or column.get("signal_label") or "Signal"))
+
+    for column_letter, label in summary_headers:
+        write_box(
+            f"{column_letter}{summary_header_row}",
+            label,
+            fill=canvas,
+            font_color=ink,
+            size=10,
+            bold=True,
+        )
+
+    ws.column_dimensions["A"].width = max(ws.column_dimensions["A"].width or 0, 20)
+    ws.column_dimensions["B"].width = max(ws.column_dimensions["B"].width or 0, 14)
+    for index in range(3, 3 + len(weekly_summary_columns)):
+        letter = get_column_letter(index)
+        ws.column_dimensions[letter].width = max(ws.column_dimensions[letter].width or 0, 16)
+
+    for offset, row in enumerate(weekly_summary_rows):
+        current_row = summary_data_row + offset
+        stripe_fill = paper if offset % 2 == 0 else soft_neutral
+        write_box(
+            f"A{current_row}",
+            row.get("week_label") or "N/D",
+            fill=stripe_fill,
+            font_color=ink,
+            size=10,
+            bold=False,
+        )
+        write_box(
+            f"B{current_row}",
+            row.get("days_observed") or 0,
+            fill=stripe_fill,
+            font_color=ink,
+            size=10,
+            bold=False,
+        )
+        values = row.get("values") or {}
+        for index, column in enumerate(weekly_summary_columns, start=3):
+            write_box(
+                f"{get_column_letter(index)}{current_row}",
+                values.get(column.get("signal_key")) or "N/D",
+                fill=stripe_fill,
+                font_color=ink,
+                size=10,
+                bold=False,
+            )
+        ws.row_dimensions[current_row].height = 22

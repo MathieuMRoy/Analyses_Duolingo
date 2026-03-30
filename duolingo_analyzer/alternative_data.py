@@ -58,6 +58,15 @@ HISTORY_COLUMNS = [
     "notes",
     "collection_mode",
 ]
+WEEKLY_SUMMARY_LABELS = {
+    "job_posts": "Job Posts",
+    "google_trends": "Google Trends",
+    "ios_rating_score": "iOS Rating",
+    "reddit_mentions_7d": "Reddit (7j)",
+    "instagram_followers": "Instagram",
+    "tiktok_followers": "TikTok",
+    "youtube_subscribers": "YouTube",
+}
 
 
 @dataclass(frozen=True)
@@ -745,9 +754,90 @@ def _build_latest_signal_rows(history_df: pd.DataFrame) -> list[dict[str, object
     return sorted(rows, key=lambda row: (row["sort_order"], str(row["signal_label"]).lower()))
 
 
+def _build_weekly_summary(history_df: pd.DataFrame) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    if history_df.empty:
+        return [], []
+
+    df = history_df.copy()
+    df["snapshot_date"] = pd.to_datetime(df["snapshot_date"], errors="coerce")
+    df["week_start"] = pd.to_datetime(df["week_start"], errors="coerce")
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df = df.dropna(subset=["snapshot_date", "week_start", "signal_key", "value"])
+    if df.empty:
+        return [], []
+
+    latest_snapshot = df["snapshot_date"].max()
+    current_snapshot_df = df[df["snapshot_date"] == latest_snapshot].copy()
+    if current_snapshot_df.empty:
+        return [], []
+
+    signal_meta = (
+        current_snapshot_df[["signal_key", "signal_label", "sort_order"]]
+        .drop_duplicates(subset=["signal_key"])
+        .sort_values(["sort_order", "signal_label"])
+    )
+    signal_keys = signal_meta["signal_key"].astype(str).tolist()
+    filtered_df = df[df["signal_key"].astype(str).isin(signal_keys)].copy()
+    if filtered_df.empty:
+        return [], []
+
+    week_meta = (
+        filtered_df.groupby(["week_start", "week_label"], dropna=False)["snapshot_date"]
+        .nunique()
+        .reset_index(name="days_observed")
+        .sort_values("week_start")
+    )
+    if week_meta.empty:
+        return [], []
+
+    week_meta = week_meta.tail(8)
+    week_index = {(row.week_start, row.week_label): int(row.days_observed) for row in week_meta.itertuples(index=False)}
+    valid_week_starts = {row.week_start for row in week_meta.itertuples(index=False)}
+
+    filtered_df = filtered_df[filtered_df["week_start"].isin(valid_week_starts)].copy()
+    grouped = (
+        filtered_df.groupby(["week_start", "week_label", "signal_key"], dropna=False)["value"]
+        .mean()
+        .reset_index()
+    )
+
+    value_map: dict[tuple[pd.Timestamp, str], dict[str, float]] = {}
+    for row in grouped.itertuples(index=False):
+        bucket = value_map.setdefault((row.week_start, row.week_label), {})
+        bucket[str(row.signal_key)] = float(row.value)
+
+    columns = [
+        {
+            "signal_key": str(row.signal_key),
+            "signal_label": str(row.signal_label),
+            "display_label": WEEKLY_SUMMARY_LABELS.get(str(row.signal_key), str(row.signal_label)),
+            "sort_order": int(_clean_numeric(row.sort_order) or 999),
+        }
+        for row in signal_meta.itertuples(index=False)
+    ]
+
+    summary_rows: list[dict[str, object]] = []
+    for row in week_meta.itertuples(index=False):
+        week_key = (row.week_start, row.week_label)
+        signal_values = value_map.get(week_key, {})
+        summary_rows.append(
+            {
+                "week_label": row.week_label or "N/D",
+                "days_observed": int(row.days_observed or 0),
+                "values": {
+                    column["signal_key"]: _format_value(signal_values.get(column["signal_key"]))
+                    for column in columns
+                },
+            }
+        )
+
+    return columns, summary_rows
+
+
 def generate_alternative_data_package(as_of_date: object | None = None) -> dict[str, object]:
     history_df = refresh_alternative_data_history(as_of_date)
     rows = _build_latest_signal_rows(history_df)
+    weekly_summary_columns, weekly_summary_rows = _build_weekly_summary(history_df)
 
     if rows:
         latest_snapshot_date = max(row["snapshot_date"] for row in rows)
@@ -769,6 +859,8 @@ def generate_alternative_data_package(as_of_date: object | None = None) -> dict[
             "signals_down": signals_down,
         },
         "rows": rows,
+        "weekly_summary_columns": weekly_summary_columns,
+        "weekly_summary_rows": weekly_summary_rows,
         "history_rows": history_df.to_dict("records") if not history_df.empty else [],
     }
 
