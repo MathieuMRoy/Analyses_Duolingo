@@ -25,6 +25,7 @@ REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 TARGET_USERS_FILE = BASE_DIR / "target_users.csv"
 DAILY_LOG_FILE = BASE_DIR / "daily_streaks_log.csv"
+ALTERNATIVE_DATA_INPUT_FILE = BASE_DIR / "alternative_data_inputs.csv"
 APP_TIMEZONE = ZoneInfo("America/Toronto")
 
 
@@ -36,6 +37,7 @@ date_str = now_toronto().strftime("%Y-%m-%d")
 DAILY_RAPPORT_EXCEL_FILE = REPORT_DIR / f"rapport_{date_str}.xlsx"
 # Fichier unique qui s'enrichit chaque jour (historique)
 RAPPORT_EXCEL_FILE = REPORT_DIR / "rapport_historique.xlsx"
+ALTERNATIVE_DATA_HISTORY_FILE = REPORT_DIR / "alternative_data_history.csv"
 
 # ─── Constantes et Clés API ─────────────────────────────────────────────────
 CEO_USERNAME = "luis"

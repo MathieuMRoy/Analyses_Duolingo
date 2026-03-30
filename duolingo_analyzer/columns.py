@@ -20,6 +20,8 @@ SIGNALS_SHEET = "Signaux Financiers"
 SIGNALS_RAW_SHEET = "Signaux Financiers - Raw"
 QUARTERLY_SHEET = "Nowcast Trimestriel"
 QUARTERLY_RAW_SHEET = "Nowcast Trimestriel - Raw"
+ALT_DATA_SHEET = "Alternative Data"
+ALT_DATA_RAW_SHEET = "Alternative Data - Raw"
 DCF_SHEET = "Valorisation DCF"
 
 LEGACY_SHEET_NAMES = {

@@ -6,6 +6,7 @@ from __future__ import annotations
 import pandas as pd
 
 from duolingo_analyzer.agent import generer_rapport_ia
+from duolingo_analyzer.alternative_data import generate_alternative_data_package
 from duolingo_analyzer.config import TARGET_USERS_FILE
 from duolingo_analyzer.discovery import initialiser_cibles
 from duolingo_analyzer.financial_signals import generate_financial_signal_package
@@ -44,6 +45,7 @@ if __name__ == "__main__":
 
     signaux_financiers = generate_financial_signal_package(statistiques.get("date_jour"))
     nowcast_trimestriel = generate_quarterly_nowcast_package(statistiques.get("date_jour"))
+    alternative_data = generate_alternative_data_package(statistiques.get("date_jour"))
     valorisation_dcf = generate_dcf_valuation_package(nowcast_trimestriel, statistiques.get("date_jour"))
     rapport_ia = generer_rapport_ia(statistiques, signaux_financiers, nowcast_trimestriel)
     sauvegarder_rapport_excel(
@@ -51,6 +53,7 @@ if __name__ == "__main__":
         rapport_ia,
         signaux_financiers,
         nowcast_trimestriel,
+        alternative_data,
         valorisation_dcf,
     )
 

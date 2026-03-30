@@ -8,8 +8,9 @@ import shutil
 import pandas as pd
 from openpyxl import load_workbook
 
+from .alternative_data import build_alternative_data_raw_df
 from .columns import (
-    AI_SHEET, BAD_SHEET_NAMES, CHART_DATA_SHEET, DCF_SHEET, GLOSSAIRE_RAW_SHEET,
+    AI_SHEET, ALT_DATA_RAW_SHEET, ALT_DATA_SHEET, BAD_SHEET_NAMES, CHART_DATA_SHEET, DCF_SHEET, GLOSSAIRE_RAW_SHEET,
     GLOSSAIRE_SHEET, LEGACY_SHEET_NAMES, QUARTERLY_RAW_SHEET, QUARTERLY_SHEET,
     SIGNALS_RAW_SHEET, SIGNALS_SHEET, SUMMARY_COLUMN_ALIASES, SUMMARY_SHEET, TRENDS_SHEET,
 )
@@ -18,6 +19,7 @@ from .excel_dashboard import refresh_trends_dashboard
 from .financial_signals import build_financial_signal_sheet_df
 from .quarterly_nowcast import build_quarterly_nowcast_raw_df
 from .reporting.sheets.dcf_valuation_sheet import render_dcf_valuation_sheet
+from .reporting.sheets.alternative_data_sheet import render_alternative_data_sheet
 from .reporting.sheets.financial_nowcast_sheet import render_financial_nowcast_sheet
 from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from .reporting.sheets.monthly_trends_sheet import add_monthly_trends_chart, build_monthly_trends_frames
@@ -136,6 +138,7 @@ def sauvegarder_rapport_excel(
     ia_report: str = None,
     financial_signals: dict | None = None,
     quarterly_nowcast: dict | None = None,
+    alternative_data: dict | None = None,
     dcf_valuation: dict | None = None,
 ) -> None:
     """
@@ -171,6 +174,10 @@ def sauvegarder_rapport_excel(
                 quarterly_sheet_df = build_quarterly_nowcast_raw_df(quarterly_nowcast)
                 pd.DataFrame().to_excel(writer, sheet_name=QUARTERLY_SHEET, index=False)
                 quarterly_sheet_df.to_excel(writer, sheet_name=QUARTERLY_RAW_SHEET, index=False)
+            if alternative_data is not None:
+                alternative_data_df = build_alternative_data_raw_df(alternative_data)
+                pd.DataFrame().to_excel(writer, sheet_name=ALT_DATA_SHEET, index=False)
+                alternative_data_df.to_excel(writer, sheet_name=ALT_DATA_RAW_SHEET, index=False)
             if dcf_valuation:
                 pd.DataFrame().to_excel(writer, sheet_name=DCF_SHEET, index=False)
 
@@ -190,7 +197,7 @@ def sauvegarder_rapport_excel(
         wb = load_workbook(RAPPORT_EXCEL_FILE)
 
         remove_sheets(wb, [*BAD_SHEET_NAMES, *LEGACY_SHEET_NAMES, AI_SHEET])
-        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, GLOSSAIRE_RAW_SHEET])
+        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, ALT_DATA_RAW_SHEET, GLOSSAIRE_RAW_SHEET])
 
         style_ctx = build_style_context()
 
@@ -226,6 +233,11 @@ def sauvegarder_rapport_excel(
                 ws.freeze_panes = "A5"
                 continue
 
+            if sheet_name == ALT_DATA_SHEET and alternative_data is not None:
+                render_alternative_data_sheet(ws, alternative_data, style_ctx)
+                ws.freeze_panes = "A8"
+                continue
+
             if sheet_name == DCF_SHEET and dcf_valuation:
                 render_dcf_valuation_sheet(ws, dcf_valuation, style_ctx)
                 ws.freeze_panes = "A5"
@@ -255,10 +267,12 @@ def sauvegarder_rapport_excel(
             SUMMARY_SHEET,
             SIGNALS_SHEET,
             QUARTERLY_SHEET,
+            ALT_DATA_SHEET,
             TRENDS_SHEET,
             GLOSSAIRE_SHEET,
             SIGNALS_RAW_SHEET,
             QUARTERLY_RAW_SHEET,
+            ALT_DATA_RAW_SHEET,
             GLOSSAIRE_RAW_SHEET,
             CHART_DATA_SHEET,
         ]
@@ -271,11 +285,13 @@ def sauvegarder_rapport_excel(
                     SUMMARY_SHEET,
                     SIGNALS_SHEET,
                     QUARTERLY_SHEET,
+                    ALT_DATA_SHEET,
                     TRENDS_SHEET,
                     DCF_SHEET,
                     GLOSSAIRE_SHEET,
                     SIGNALS_RAW_SHEET,
                     QUARTERLY_RAW_SHEET,
+                    ALT_DATA_RAW_SHEET,
                     GLOSSAIRE_RAW_SHEET,
                     CHART_DATA_SHEET,
                 ],
@@ -285,15 +301,17 @@ def sauvegarder_rapport_excel(
         refresh_trends_dashboard(RAPPORT_EXCEL_FILE)
         wb = load_workbook(RAPPORT_EXCEL_FILE)
         remove_sheets(wb, [*BAD_SHEET_NAMES, *LEGACY_SHEET_NAMES, AI_SHEET])
-        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, GLOSSAIRE_RAW_SHEET, CHART_DATA_SHEET])
+        hide_sheets(wb, [SIGNALS_RAW_SHEET, QUARTERLY_RAW_SHEET, ALT_DATA_RAW_SHEET, GLOSSAIRE_RAW_SHEET, CHART_DATA_SHEET])
         ordered_sheet_names = [
             SUMMARY_SHEET,
             SIGNALS_SHEET,
             QUARTERLY_SHEET,
+            ALT_DATA_SHEET,
             TRENDS_SHEET,
             GLOSSAIRE_SHEET,
             SIGNALS_RAW_SHEET,
             QUARTERLY_RAW_SHEET,
+            ALT_DATA_RAW_SHEET,
             GLOSSAIRE_RAW_SHEET,
             CHART_DATA_SHEET,
         ]
@@ -305,11 +323,13 @@ def sauvegarder_rapport_excel(
                     SUMMARY_SHEET,
                     SIGNALS_SHEET,
                     QUARTERLY_SHEET,
+                    ALT_DATA_SHEET,
                     TRENDS_SHEET,
                     DCF_SHEET,
                     GLOSSAIRE_SHEET,
                     SIGNALS_RAW_SHEET,
                     QUARTERLY_RAW_SHEET,
+                    ALT_DATA_RAW_SHEET,
                     GLOSSAIRE_RAW_SHEET,
                     CHART_DATA_SHEET,
                 ],
