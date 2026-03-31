@@ -127,6 +127,12 @@ def build_kpi_dictionary_df() -> pd.DataFrame:
         },
         {
             "Section": "Nowcast trimestriel",
+            "KPI": "EPS estime",
+            "Lecture utile": "Estimation implicite du benefice par action dilue du trimestre.",
+            "Methode / calcul": "On part de l'EBITDA estime, puis on applique une conversion historique prudente EBITDA -> resultat net implicite, avant de diviser par les actions diluees du dernier annual filing disponible.",
+        },
+        {
+            "Section": "Nowcast trimestriel",
             "KPI": "Guide N+1 estime",
             "Lecture utile": "Estimation interne de la guidance revenus du trimestre suivant.",
             "Methode / calcul": "Guide N+1 estimé = revenus estimés x ratio implicite. Le ratio part du ratio historique médian guidance suivante / revenus et est ajusté par la probabilité guidance raise.",

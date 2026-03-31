@@ -379,12 +379,11 @@ def render_quarterly_nowcast_sheet(
         "G14:H14",
         "G15:H16",
         "G17:H17",
-        "Couverture moyenne",
-        _raw_lookup_formula("avg_coverage_ratio", fallback="0"),
-        '="Jours observes : "&' + _raw_lookup_expr("observed_days", fallback='"0"'),
-        blue_section,
-        note_fill=soft_blue,
-        value_format="0.0%",
+        "EPS estime",
+        '=IFERROR(TEXT(' + _raw_lookup_expr("estimated_eps", fallback="0") + ', "0.00")&" $","N/D")',
+        _raw_lookup_formula("eps_note_text"),
+        green,
+        note_fill=soft_green,
     )
 
     write_box("A19:F19", "Lecture du modele", fill=navy, font_color=white, size=11, bold=True)

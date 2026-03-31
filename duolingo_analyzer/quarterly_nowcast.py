@@ -15,6 +15,7 @@ import pandas as pd
 
 from .config import BASE_DIR, REPORT_DIR, now_toronto
 from .financial_signals import FINANCIAL_SIGNALS_HISTORY_FILE
+from .valuation_dcf import _extract_latest_balance_and_cashflow_context
 
 QUARTERLY_LABELS_FILE = BASE_DIR / "financial_docs" / "quarterly_labels_template.csv"
 QUARTERLY_NOWCAST_JSON_FILE = REPORT_DIR / "quarterly_nowcast_latest.json"
@@ -377,6 +378,55 @@ def _historical_next_q_guidance_ratios(labels_map: dict[str, pd.Series] | None) 
     return ratios
 
 
+def _historical_ebitda_to_net_income_ratios(
+    labels_map: dict[str, pd.Series] | None,
+    diluted_shares_m: float | None,
+) -> list[float]:
+    ratios: list[float] = []
+    if not labels_map or not diluted_shares_m or diluted_shares_m <= 0:
+        return ratios
+
+    for row in labels_map.values():
+        actual_eps = _safe_float(row.get("actual_eps"))
+        actual_ebitda = _safe_float(row.get("actual_adjusted_ebitda_musd"))
+        actual_revenue = _safe_float(row.get("actual_revenue_musd"))
+        if actual_eps is None or actual_ebitda is None or actual_revenue is None:
+            continue
+        if actual_eps <= 0 or actual_eps >= 3.0 or actual_ebitda <= 0 or actual_revenue <= 0:
+            continue
+
+        implied_net_income = actual_eps * diluted_shares_m
+        implied_net_margin = implied_net_income / actual_revenue
+        implied_ebitda_margin = actual_ebitda / actual_revenue
+        if implied_ebitda_margin <= 0:
+            continue
+        if implied_net_margin <= 0 or implied_net_margin >= 0.35:
+            continue
+
+        ratio = implied_net_income / actual_ebitda
+        if 0.20 <= ratio <= 0.90:
+            ratios.append(ratio)
+    return ratios
+
+
+def _build_eps_context(labels_map: dict[str, pd.Series] | None) -> dict[str, float | None]:
+    balance_context = _extract_latest_balance_and_cashflow_context()
+    diluted_shares_m = _safe_float(balance_context.get("diluted_shares_m"))
+    if diluted_shares_m is None or diluted_shares_m <= 0:
+        diluted_shares_m = 48.315
+
+    conversion_ratios = _historical_ebitda_to_net_income_ratios(labels_map, diluted_shares_m)
+    ebitda_to_net_income_ratio = _median(conversion_ratios)
+    if ebitda_to_net_income_ratio is None:
+        ebitda_to_net_income_ratio = 0.55
+
+    return {
+        "diluted_shares_m": _round_or_none(diluted_shares_m, 3),
+        "ebitda_to_net_income_ratio": _round_or_none(ebitda_to_net_income_ratio, 4),
+        "historical_eps_quarters": float(len(conversion_ratios)),
+    }
+
+
 def _load_labels_df() -> pd.DataFrame:
     if not QUARTERLY_LABELS_FILE.exists():
         return pd.DataFrame()
@@ -462,6 +512,7 @@ def _build_snapshot_for_quarter(
     quarter_df: pd.DataFrame,
     label_row: pd.Series | None = None,
     labels_map: dict[str, pd.Series] | None = None,
+    eps_context: dict[str, float | None] | None = None,
 ) -> dict[str, object]:
     if quarter_df.empty:
         return {}
@@ -604,6 +655,8 @@ def _build_snapshot_for_quarter(
     median_qoq_growth = _median(revenue_qoq_growth)
     median_ebitda_margin = _median(ebitda_margins)
     median_next_q_guidance_ratio = _median(next_q_guidance_ratios)
+    diluted_shares_m = _safe_float((eps_context or {}).get("diluted_shares_m")) or 48.315
+    base_ebitda_to_net_income_ratio = _safe_float((eps_context or {}).get("ebitda_to_net_income_ratio")) or 0.55
 
     previous_actual_revenue = _safe_float(previous_label_row.get("actual_revenue_musd")) if previous_label_row is not None else None
 
@@ -625,6 +678,17 @@ def _build_snapshot_for_quarter(
         margin_adjustment = ((ebitda_prob or 0.50) - 0.50) * 0.04
         implied_margin = max(0.18, min(0.40, base_margin + margin_adjustment))
         estimated_ebitda = estimated_revenue * implied_margin
+
+    estimated_net_income = None
+    estimated_eps = None
+    if estimated_ebitda and estimated_ebitda > 0 and diluted_shares_m > 0:
+        net_income_adjustment = ((ebitda_prob or 0.50) - 0.50) * 0.08
+        implied_net_income_ratio = max(
+            0.35,
+            min(0.75, base_ebitda_to_net_income_ratio + net_income_adjustment),
+        )
+        estimated_net_income = estimated_ebitda * implied_net_income_ratio
+        estimated_eps = estimated_net_income / diluted_shares_m
 
     estimated_next_q_guidance = None
     if estimated_revenue and estimated_revenue > 0:
@@ -698,6 +762,10 @@ def _build_snapshot_for_quarter(
         "revenue_guidance_reference_quarter": previous_quarter,
         "estimated_revenue_musd": _round_or_none(estimated_revenue, 2),
         "estimated_ebitda_musd": _round_or_none(estimated_ebitda, 2),
+        "estimated_net_income_musd": _round_or_none(estimated_net_income, 2),
+        "estimated_eps": _round_or_none(estimated_eps, 3),
+        "diluted_shares_reference_m": _round_or_none(diluted_shares_m, 3),
+        "ebitda_to_net_income_ratio": _round_or_none(base_ebitda_to_net_income_ratio, 4),
         "estimated_next_q_guidance_musd": _round_or_none(estimated_next_q_guidance, 2),
         "main_drivers": drivers[:4],
         "main_risks": risks[:4],
@@ -768,6 +836,7 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
         revenue_reference = _safe_float(snapshot.get("revenue_guidance_reference_musd"))
         estimated_revenue = _safe_float(snapshot.get("estimated_revenue_musd"))
         estimated_ebitda = _safe_float(snapshot.get("estimated_ebitda_musd"))
+        estimated_eps = _safe_float(snapshot.get("estimated_eps"))
         estimated_next_q_guidance = _safe_float(snapshot.get("estimated_next_q_guidance_musd"))
         row = {
             "quarter": snapshot.get("quarter"),
@@ -813,8 +882,13 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
             "revenue_guidance_reference_quarter": snapshot.get("revenue_guidance_reference_quarter"),
             "estimated_revenue_musd": snapshot.get("estimated_revenue_musd"),
             "estimated_ebitda_musd": snapshot.get("estimated_ebitda_musd"),
+            "estimated_net_income_musd": snapshot.get("estimated_net_income_musd"),
+            "estimated_eps": snapshot.get("estimated_eps"),
+            "diluted_shares_reference_m": snapshot.get("diluted_shares_reference_m"),
+            "ebitda_to_net_income_ratio": snapshot.get("ebitda_to_net_income_ratio"),
             "estimated_next_q_guidance_musd": snapshot.get("estimated_next_q_guidance_musd"),
             "actual_revenue_musd": snapshot.get("actual_revenue_musd"),
+            "actual_eps": snapshot.get("actual_eps"),
             "actual_adjusted_ebitda_musd": snapshot.get("actual_adjusted_ebitda_musd"),
             "actual_subscription_revenue_musd": snapshot.get("actual_subscription_revenue_musd"),
             "actual_paid_subscribers_m": snapshot.get("actual_paid_subscribers_m"),
@@ -835,6 +909,11 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
                 f"Est. {_format_number_text(estimated_ebitda, 1)} M$"
                 if estimated_ebitda is not None
                 else "Est. N/D"
+            ),
+            "eps_note_text": (
+                f"Pont EBITDA -> resultat net / {_format_number_text(_safe_float(snapshot.get('diluted_shares_reference_m')), 3)} M actions"
+                if estimated_eps is not None
+                else "Pont EBITDA -> resultat net / actions diluees"
             ),
             "next_guidance_note_text": _format_estimation_note(
                 estimated_next_q_guidance,
@@ -868,11 +947,12 @@ def _build_historical_snapshot_df(history_df: pd.DataFrame, labels_df: pd.DataFr
         for _, row in labels_df.iterrows()
         if row.get("quarter")
     }
+    eps_context = _build_eps_context(labels_map)
 
     for quarter in all_quarters:
         quarter_df = history_df[history_df["quarter"] == quarter]
         label_row = labels_map.get(quarter)
-        snapshot = _build_snapshot_for_quarter(quarter, quarter_df, label_row, labels_map)
+        snapshot = _build_snapshot_for_quarter(quarter, quarter_df, label_row, labels_map, eps_context=eps_context)
         if snapshot:
             quarter_rows.append(snapshot)
 
@@ -1019,6 +1099,9 @@ def build_quarterly_nowcast_package(reference_date: str | None = None) -> dict[s
         "ebitda_beat_probability_proxy": current_snapshot.get("ebitda_beat_probability_proxy"),
         "ebitda_beat_probability": current_snapshot.get("ebitda_beat_probability_proxy"),
         "estimated_ebitda_musd": current_snapshot.get("estimated_ebitda_musd"),
+        "estimated_net_income_musd": current_snapshot.get("estimated_net_income_musd"),
+        "estimated_eps": current_snapshot.get("estimated_eps"),
+        "diluted_shares_reference_m": current_snapshot.get("diluted_shares_reference_m"),
         "guidance_raise_probability_proxy": current_snapshot.get("guidance_raise_probability_proxy"),
         "guidance_raise_probability": current_snapshot.get("guidance_raise_probability_proxy"),
         "estimated_next_q_guidance_musd": current_snapshot.get("estimated_next_q_guidance_musd"),
