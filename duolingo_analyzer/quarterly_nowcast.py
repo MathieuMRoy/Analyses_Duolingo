@@ -413,7 +413,7 @@ def _build_eps_context(labels_map: dict[str, pd.Series] | None) -> dict[str, flo
     balance_context = _extract_latest_balance_and_cashflow_context()
     diluted_shares_m = _safe_float(balance_context.get("diluted_shares_m"))
     if diluted_shares_m is None or diluted_shares_m <= 0:
-        diluted_shares_m = 48.315
+        diluted_shares_m = 49.8
 
     conversion_ratios = _historical_ebitda_to_net_income_ratios(labels_map, diluted_shares_m)
     ebitda_to_net_income_ratio = _median(conversion_ratios)
@@ -655,7 +655,7 @@ def _build_snapshot_for_quarter(
     median_qoq_growth = _median(revenue_qoq_growth)
     median_ebitda_margin = _median(ebitda_margins)
     median_next_q_guidance_ratio = _median(next_q_guidance_ratios)
-    diluted_shares_m = _safe_float((eps_context or {}).get("diluted_shares_m")) or 48.315
+    diluted_shares_m = _safe_float((eps_context or {}).get("diluted_shares_m")) or 49.8
     base_ebitda_to_net_income_ratio = _safe_float((eps_context or {}).get("ebitda_to_net_income_ratio")) or 0.55
 
     previous_actual_revenue = _safe_float(previous_label_row.get("actual_revenue_musd")) if previous_label_row is not None else None

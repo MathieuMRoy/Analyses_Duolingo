@@ -33,7 +33,7 @@ DEFAULT_LATEST_FINANCIAL_CONTEXT = {
     "free_cash_flow_musd": 360.4,
     "net_income_musd": 414.1,
     "adjusted_ebitda_musd": None,
-    "diluted_shares_m": 48.315,
+    "diluted_shares_m": 49.8,
     "stock_based_compensation_musd": 137.4,
     "total_debt_musd": 0.0,
 }
@@ -261,6 +261,16 @@ def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
         diluted_shares_m = None
         if net_income_kusd and diluted_eps and diluted_eps > 0:
             diluted_shares_m = net_income_kusd / diluted_eps / 1000.0
+        if diluted_shares_m is None:
+            diluted_shares_m = _extract_first_match(
+                text,
+                r"diluted shares outstanding\s*\.{0,}\s*(\d+(?:\.\d+)?)",
+            )
+        if diluted_shares_m is None:
+            diluted_shares_m = _extract_first_match(
+                text,
+                r"weighted average(?: number of)? diluted shares(?: outstanding)?\s*\.{0,}\s*(\d+(?:\.\d+)?)",
+            )
 
         return {
             "source_file": path.name,
