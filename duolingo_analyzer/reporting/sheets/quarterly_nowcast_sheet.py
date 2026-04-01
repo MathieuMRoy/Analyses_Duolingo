@@ -293,7 +293,11 @@ def render_quarterly_nowcast_sheet(
 
     write_box(
         "A7:F10",
-        '=IFERROR(TEXT(' + _raw_lookup_expr("estimated_revenue_musd", fallback="0") + ', "0.0")&" M$","N/D")',
+        '=IFERROR(IF('
+        + _raw_lookup_expr("estimated_revenue_musd", fallback="0")
+        + '>0, TEXT('
+        + _raw_lookup_expr("estimated_revenue_musd", fallback="0")
+        + ', "0.0")&" M$", "N/D"), "N/D")',
         fill=paper,
         font_color=ink,
         size=28,
@@ -380,7 +384,11 @@ def render_quarterly_nowcast_sheet(
         "G15:H16",
         "G17:H17",
         "EPS estime",
-        '=IFERROR(TEXT(' + _raw_lookup_expr("estimated_eps", fallback="0") + ', "0.00")&" $","N/D")',
+        '=IFERROR(IF('
+        + _raw_lookup_expr("estimated_eps", fallback="0")
+        + '>0, TEXT('
+        + _raw_lookup_expr("estimated_eps", fallback="0")
+        + ', "0.00")&" $", "N/D"), "N/D")',
         _raw_lookup_formula("eps_note_text"),
         green,
         note_fill=soft_green,

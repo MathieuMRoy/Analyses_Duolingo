@@ -513,6 +513,7 @@ def _build_snapshot_for_quarter(
     label_row: pd.Series | None = None,
     labels_map: dict[str, pd.Series] | None = None,
     eps_context: dict[str, float | None] | None = None,
+    prior_snapshots: dict[str, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     if quarter_df.empty:
         return {}
@@ -544,6 +545,7 @@ def _build_snapshot_for_quarter(
     avg_subscription_proxy = _mean(quarter_df["subscription_momentum_proxy"], 14)
     previous_quarter = _previous_quarter(quarter)
     previous_label_row = labels_map.get(previous_quarter) if labels_map and previous_quarter else None
+    previous_snapshot = prior_snapshots.get(previous_quarter) if prior_snapshots and previous_quarter else None
     revenue_guidance_reference = None
     if previous_label_row is not None and "guidance_next_q_revenue_musd" in previous_label_row.index:
         revenue_guidance_reference = _safe_float(previous_label_row.get("guidance_next_q_revenue_musd"))
@@ -659,18 +661,33 @@ def _build_snapshot_for_quarter(
     base_ebitda_to_net_income_ratio = _safe_float((eps_context or {}).get("ebitda_to_net_income_ratio")) or 0.55
 
     previous_actual_revenue = _safe_float(previous_label_row.get("actual_revenue_musd")) if previous_label_row is not None else None
+    previous_estimated_revenue = (
+        _safe_float(previous_snapshot.get("estimated_revenue_musd")) if previous_snapshot is not None else None
+    )
+    previous_estimated_next_q_guidance = (
+        _safe_float(previous_snapshot.get("estimated_next_q_guidance_musd")) if previous_snapshot is not None else None
+    )
 
     estimated_revenue = None
+    revenue_estimation_basis = "unavailable"
+    base_growth = median_qoq_growth if median_qoq_growth is not None else 0.06
+    growth_adjustment = ((revenue_prob or 0.50) - 0.50) * 0.10
+    implied_growth = max(-0.05, min(0.15, base_growth + growth_adjustment))
     if revenue_guidance_reference and revenue_guidance_reference > 0:
         base_beat = median_guidance_beat if median_guidance_beat is not None else 0.025
         beat_adjustment = ((revenue_prob or 0.50) - 0.50) * 0.08
         implied_beat = max(-0.03, min(0.08, base_beat + beat_adjustment))
         estimated_revenue = revenue_guidance_reference * (1.0 + implied_beat)
+        revenue_estimation_basis = "guidance_management"
     elif previous_actual_revenue and previous_actual_revenue > 0:
-        base_growth = median_qoq_growth if median_qoq_growth is not None else 0.06
-        growth_adjustment = ((revenue_prob or 0.50) - 0.50) * 0.10
-        implied_growth = max(-0.05, min(0.15, base_growth + growth_adjustment))
         estimated_revenue = previous_actual_revenue * (1.0 + implied_growth)
+        revenue_estimation_basis = "actual_qoq_fallback"
+    elif previous_estimated_next_q_guidance and previous_estimated_next_q_guidance > 0:
+        estimated_revenue = previous_estimated_next_q_guidance
+        revenue_estimation_basis = "prior_nowcast_guidance"
+    elif previous_estimated_revenue and previous_estimated_revenue > 0:
+        estimated_revenue = previous_estimated_revenue * (1.0 + implied_growth)
+        revenue_estimation_basis = "prior_nowcast_qoq_fallback"
 
     estimated_ebitda = None
     if estimated_revenue and estimated_revenue > 0:
@@ -761,6 +778,7 @@ def _build_snapshot_for_quarter(
         "revenue_guidance_reference_musd": _round_or_none(revenue_guidance_reference, 2),
         "revenue_guidance_reference_quarter": previous_quarter,
         "estimated_revenue_musd": _round_or_none(estimated_revenue, 2),
+        "revenue_estimation_basis": revenue_estimation_basis,
         "estimated_ebitda_musd": _round_or_none(estimated_ebitda, 2),
         "estimated_net_income_musd": _round_or_none(estimated_net_income, 2),
         "estimated_eps": _round_or_none(estimated_eps, 3),
@@ -838,6 +856,7 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
         estimated_ebitda = _safe_float(snapshot.get("estimated_ebitda_musd"))
         estimated_eps = _safe_float(snapshot.get("estimated_eps"))
         estimated_next_q_guidance = _safe_float(snapshot.get("estimated_next_q_guidance_musd"))
+        revenue_estimation_basis = str(snapshot.get("revenue_estimation_basis") or "")
         row = {
             "quarter": snapshot.get("quarter"),
             "snapshot_as_of_date": snapshot.get("snapshot_as_of_date"),
@@ -881,6 +900,7 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
             "revenue_guidance_reference_musd": snapshot.get("revenue_guidance_reference_musd"),
             "revenue_guidance_reference_quarter": snapshot.get("revenue_guidance_reference_quarter"),
             "estimated_revenue_musd": snapshot.get("estimated_revenue_musd"),
+            "revenue_estimation_basis": snapshot.get("revenue_estimation_basis"),
             "estimated_ebitda_musd": snapshot.get("estimated_ebitda_musd"),
             "estimated_net_income_musd": snapshot.get("estimated_net_income_musd"),
             "estimated_eps": snapshot.get("estimated_eps"),
@@ -899,11 +919,23 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
             "main_risks_text": "\n".join(f"- {item}" for item in risks),
             "model_summary_text": snapshot.get("model_summary_text") or _build_snapshot_summary_text(snapshot),
             "confidence_context_text": snapshot.get("confidence_context_text") or _build_confidence_context_text(snapshot),
-            "revenue_note_text": _format_estimation_note(
-                estimated_revenue,
-                revenue_reference,
-                prefix="Est.",
-                benchmark_label="guidance",
+            "revenue_note_text": (
+                f"Est. {_format_number_text(estimated_revenue, 1)} M$ | base interne du nowcast precedent"
+                if estimated_revenue is not None
+                and revenue_reference is None
+                and revenue_estimation_basis == "prior_nowcast_guidance"
+                else (
+                    f"Est. {_format_number_text(estimated_revenue, 1)} M$ | prolongement QoQ du nowcast precedent"
+                    if estimated_revenue is not None
+                    and revenue_reference is None
+                    and revenue_estimation_basis == "prior_nowcast_qoq_fallback"
+                    else _format_estimation_note(
+                        estimated_revenue,
+                        revenue_reference,
+                        prefix="Est.",
+                        benchmark_label="guidance",
+                    )
+                )
             ),
             "ebitda_note_text": (
                 f"Est. {_format_number_text(estimated_ebitda, 1)} M$"
@@ -938,6 +970,7 @@ def build_quarterly_nowcast_raw_df(package: dict[str, object]) -> pd.DataFrame:
 
 def _build_historical_snapshot_df(history_df: pd.DataFrame, labels_df: pd.DataFrame) -> pd.DataFrame:
     quarter_rows: list[dict[str, object]] = []
+    prior_snapshots: dict[str, dict[str, object]] = {}
     all_quarters = _sort_quarters(
         list(set(history_df["quarter"].dropna().tolist()) | set(labels_df.get("quarter", pd.Series(dtype=str)).dropna().tolist()))
     )
@@ -952,9 +985,17 @@ def _build_historical_snapshot_df(history_df: pd.DataFrame, labels_df: pd.DataFr
     for quarter in all_quarters:
         quarter_df = history_df[history_df["quarter"] == quarter]
         label_row = labels_map.get(quarter)
-        snapshot = _build_snapshot_for_quarter(quarter, quarter_df, label_row, labels_map, eps_context=eps_context)
+        snapshot = _build_snapshot_for_quarter(
+            quarter,
+            quarter_df,
+            label_row,
+            labels_map,
+            eps_context=eps_context,
+            prior_snapshots=prior_snapshots,
+        )
         if snapshot:
             quarter_rows.append(snapshot)
+            prior_snapshots[str(snapshot.get("quarter"))] = snapshot
 
     if not quarter_rows:
         return pd.DataFrame()
