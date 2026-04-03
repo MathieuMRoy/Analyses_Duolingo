@@ -18,6 +18,11 @@ FILES_TO_SYNC = {
     "alternative_data_inputs.csv": BASE_DIR / "alternative_data_inputs.csv",
     "alternative_data_history.csv": BASE_DIR / "rapports_donnees" / "alternative_data_history.csv",
     "explored_nodes.json": BASE_DIR / "explored_nodes.json",
+    "financial_signals_history.csv": BASE_DIR / "rapports_donnees" / "financial_signals_history.csv",
+    "financial_signals_latest.json": BASE_DIR / "rapports_donnees" / "financial_signals_latest.json",
+    "quarterly_nowcast_latest.json": BASE_DIR / "rapports_donnees" / "quarterly_nowcast_latest.json",
+    "quarterly_nowcast_snapshots.csv": BASE_DIR / "rapports_donnees" / "quarterly_nowcast_snapshots.csv",
+    "dcf_valuation_latest.json": BASE_DIR / "rapports_donnees" / "dcf_valuation_latest.json",
     "rapport_historique.xlsx": BASE_DIR / "rapports_donnees" / "rapport_historique.xlsx",
 }
 MIME_TYPES = {
