@@ -22,6 +22,7 @@ FILES_TO_SYNC = {
     "financial_signals_latest.json": BASE_DIR / "rapports_donnees" / "financial_signals_latest.json",
     "quarterly_nowcast_latest.json": BASE_DIR / "rapports_donnees" / "quarterly_nowcast_latest.json",
     "quarterly_nowcast_snapshots.csv": BASE_DIR / "rapports_donnees" / "quarterly_nowcast_snapshots.csv",
+    "quarterly_nowcast_locked_archive.csv": BASE_DIR / "rapports_donnees" / "quarterly_nowcast_locked_archive.csv",
     "dcf_valuation_latest.json": BASE_DIR / "rapports_donnees" / "dcf_valuation_latest.json",
     "rapport_historique.xlsx": BASE_DIR / "rapports_donnees" / "rapport_historique.xlsx",
 }

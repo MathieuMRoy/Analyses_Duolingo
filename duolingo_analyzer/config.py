@@ -27,6 +27,7 @@ TARGET_USERS_FILE = BASE_DIR / "target_users.csv"
 DAILY_LOG_FILE = BASE_DIR / "daily_streaks_log.csv"
 ALTERNATIVE_DATA_INPUT_FILE = BASE_DIR / "alternative_data_inputs.csv"
 APP_TIMEZONE = ZoneInfo("America/Toronto")
+DAILY_LOG_RETENTION_DAYS = int(os.getenv("DAILY_LOG_RETENTION_DAYS", "120"))
 
 
 def now_toronto() -> datetime:

@@ -20,6 +20,7 @@ from .valuation_dcf import _extract_latest_balance_and_cashflow_context
 QUARTERLY_LABELS_FILE = BASE_DIR / "financial_docs" / "quarterly_labels_template.csv"
 QUARTERLY_NOWCAST_JSON_FILE = REPORT_DIR / "quarterly_nowcast_latest.json"
 QUARTERLY_SNAPSHOTS_FILE = REPORT_DIR / "quarterly_nowcast_snapshots.csv"
+QUARTERLY_LOCKED_ARCHIVE_FILE = REPORT_DIR / "quarterly_nowcast_locked_archive.csv"
 
 
 def _safe_float(value: object) -> float | None:
@@ -124,11 +125,11 @@ def _parse_list(value: object) -> list[str]:
     return [item.strip() for item in raw.split(" | ") if item.strip()]
 
 
-def _load_saved_snapshots_df() -> pd.DataFrame:
-    if not QUARTERLY_SNAPSHOTS_FILE.exists():
+def _load_snapshot_df(path: Path) -> pd.DataFrame:
+    if not path.exists():
         return pd.DataFrame()
 
-    df = pd.read_csv(QUARTERLY_SNAPSHOTS_FILE)
+    df = pd.read_csv(path)
     if df.empty:
         return df
 
@@ -157,6 +158,14 @@ def _load_saved_snapshots_df() -> pd.DataFrame:
             df[column] = df[column].apply(_parse_list)
 
     return df
+
+
+def _load_saved_snapshots_df() -> pd.DataFrame:
+    return _load_snapshot_df(QUARTERLY_SNAPSHOTS_FILE)
+
+
+def _load_locked_archive_df() -> pd.DataFrame:
+    return _load_snapshot_df(QUARTERLY_LOCKED_ARCHIVE_FILE)
 
 
 def _serialize_snapshots_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -1030,7 +1039,8 @@ POST_RELEASE_FIELDS = {
 
 def _merge_saved_and_live_snapshots(live_df: pd.DataFrame, reference_ts: pd.Timestamp) -> pd.DataFrame:
     saved_df = _load_saved_snapshots_df()
-    if live_df.empty and saved_df.empty:
+    archive_df = _load_locked_archive_df()
+    if live_df.empty and saved_df.empty and archive_df.empty:
         return pd.DataFrame()
 
     live_rows = {
@@ -1043,9 +1053,14 @@ def _merge_saved_and_live_snapshots(live_df: pd.DataFrame, reference_ts: pd.Time
         for _, row in saved_df.iterrows()
         if row.get("quarter")
     }
+    archived_rows = {
+        str(row["quarter"]): row.to_dict()
+        for _, row in archive_df.iterrows()
+        if row.get("quarter")
+    }
 
     merged_rows: list[dict[str, object]] = []
-    all_quarters = _sort_quarters(list(set(live_rows.keys()) | set(saved_rows.keys())))
+    all_quarters = _sort_quarters(list(set(live_rows.keys()) | set(saved_rows.keys()) | set(archived_rows.keys())))
     reference_day = pd.Timestamp(reference_ts).normalize()
 
     for quarter in all_quarters:
@@ -1053,8 +1068,19 @@ def _merge_saved_and_live_snapshots(live_df: pd.DataFrame, reference_ts: pd.Time
         quarter_closed = quarter_end is not None and reference_day > quarter_end
         live_row = live_rows.get(quarter)
         saved_row = saved_rows.get(quarter)
+        archived_row = archived_rows.get(quarter)
 
-        if saved_row and bool(saved_row.get("snapshot_locked")):
+        if archived_row:
+            selected = dict(archived_row)
+            if live_row:
+                for field in POST_RELEASE_FIELDS:
+                    value = live_row.get(field)
+                    if value is None:
+                        continue
+                    if isinstance(value, float) and pd.isna(value):
+                        continue
+                    selected[field] = value
+        elif saved_row and bool(saved_row.get("snapshot_locked")):
             selected = dict(saved_row)
             if live_row:
                 for field in POST_RELEASE_FIELDS:
@@ -1193,6 +1219,29 @@ def save_quarterly_nowcast_package(package: dict[str, object]) -> tuple[Path, Pa
     snapshots_df = pd.DataFrame(package.get("historical_snapshots", []))
     if not snapshots_df.empty:
         snapshots_df.to_csv(QUARTERLY_SNAPSHOTS_FILE, index=False, encoding="utf-8")
+
+        if "snapshot_locked" in snapshots_df.columns:
+            locked_mask = snapshots_df["snapshot_locked"].fillna(False).astype(bool)
+            locked_df = snapshots_df[locked_mask].copy()
+        else:
+            locked_df = pd.DataFrame()
+        existing_archive_df = _load_locked_archive_df()
+        if not existing_archive_df.empty:
+            combined_archive_df = pd.concat([existing_archive_df, locked_df], ignore_index=True)
+        else:
+            combined_archive_df = locked_df
+
+        if not combined_archive_df.empty:
+            combined_archive_df["quarter"] = combined_archive_df["quarter"].astype(str)
+            combined_archive_df = combined_archive_df.sort_values(["quarter", "snapshot_as_of_date"], na_position="last")
+            combined_archive_df = combined_archive_df.drop_duplicates(subset=["quarter"], keep="last").reset_index(drop=True)
+            _serialize_snapshots_df(combined_archive_df).to_csv(
+                QUARTERLY_LOCKED_ARCHIVE_FILE,
+                index=False,
+                encoding="utf-8",
+            )
+        elif not QUARTERLY_LOCKED_ARCHIVE_FILE.exists():
+            pd.DataFrame().to_csv(QUARTERLY_LOCKED_ARCHIVE_FILE, index=False, encoding="utf-8")
     else:
         pd.DataFrame().to_csv(QUARTERLY_SNAPSHOTS_FILE, index=False, encoding="utf-8")
 

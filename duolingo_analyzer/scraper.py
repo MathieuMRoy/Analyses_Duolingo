@@ -15,6 +15,7 @@ from .config import (
     DUOLINGO_PROFILE_API,
     SESSION,
     DAILY_LOG_FILE,
+    DAILY_LOG_RETENTION_DAYS,
     now_toronto,
 )
 from .subscription_detection import detect_has_max_from_user_payload, serialize_optional_bool
@@ -232,6 +233,8 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
 
 RETENTION_DAYS = 7  # Nombre de jours de données à conserver
 
+RETENTION_DAYS = DAILY_LOG_RETENTION_DAYS
+
 
 def purger_anciennes_donnees() -> None:
     """Supprime les lignes de plus de RETENTION_DAYS jours du daily log."""
@@ -262,4 +265,3 @@ def purger_anciennes_donnees() -> None:
         writer.writerows(kept)
 
     print(f"  🧹 Purge du log : {removed} lignes supprimées (avant {cutoff}), {len(kept)} conservées.")
-
