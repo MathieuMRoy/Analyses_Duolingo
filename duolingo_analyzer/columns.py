@@ -1,18 +1,17 @@
 """
-Shared sheet names, column names, and workbook constants.
+Definitions centralisees des colonnes, noms de feuilles et constantes partagees.
 
-This module is the single place to update a visible tab name or a
-daily-tracking column.
+Ce module est le point unique pour ajouter, renommer ou supprimer
+une colonne du suivi quotidien ou une feuille Excel.
 """
 
 import pandas as pd
 
 
-# Sheet names
+# Noms de feuilles Excel
 SUMMARY_SHEET = "Suivi Quotidien"
 AI_SHEET = "🤖 Analyse Strategique"
-BRIEFING_SHEET = "Briefing IA"
-GLOSSAIRE_SHEET = BRIEFING_SHEET
+GLOSSAIRE_SHEET = "📖 Dictionnaire des KPIs"
 GLOSSAIRE_RAW_SHEET = "Dictionnaire des KPIs - Raw"
 TRENDS_SHEET = "📈 Tendances Mensuelles"
 CHART_DATA_SHEET = "📊 Donnees Graphique"
@@ -26,11 +25,8 @@ ALT_DATA_RAW_SHEET = "Alternative Data - Raw"
 DCF_SHEET = "Valorisation DCF"
 
 LEGACY_SHEET_NAMES = {
-    "Resume Financier Q1",
-    "Dictionnaire des KPIs",
-    "Guide des KPIs",
     "📊 Resume Financier Q1",
-    "📖 Dictionnaire des KPIs",
+    "Briefing IA",
 }
 
 BAD_SHEET_NAMES = {
@@ -40,11 +36,11 @@ BAD_SHEET_NAMES = {
 }
 
 
-# Daily summary columns
+# Colonnes du suivi quotidien
 SUMMARY_COLUMNS = [
     "Date",
-    "Série Moyenne (Jours)",
-    "Évol. vs Veille",
+    "Serie Moyenne (Jours)",
+    "Evol. vs Veille",
     "Apprentissage (XP/j)",
     "Taux Abonn. Super",
     "Taux d'Abandon Global",
@@ -62,13 +58,13 @@ PERCENT_COLUMNS = {
 
 SUMMARY_COLUMN_ALIASES = {
     "Date": "Date",
-    "Moyenne Streak (J)": "Série Moyenne (Jours)",
-    "Serie Moyenne (Jours)": "Série Moyenne (Jours)",
-    "Série Moyenne (Jours)": "Série Moyenne (Jours)",
-    "Evolution vs Hier": "Évol. vs Veille",
-    "Evol. vs Veille": "Évol. vs Veille",
-    "Évol. vs Veille": "Évol. vs Veille",
-    "Évolution vs Hier": "Évol. vs Veille",
+    "Moyenne Streak (J)": "Serie Moyenne (Jours)",
+    "Serie Moyenne (Jours)": "Serie Moyenne (Jours)",
+    "Série Moyenne (Jours)": "Serie Moyenne (Jours)",
+    "Evolution vs Hier": "Evol. vs Veille",
+    "Evol. vs Veille": "Evol. vs Veille",
+    "Évol. vs Veille": "Evol. vs Veille",
+    "Évolution vs Hier": "Evol. vs Veille",
     "Delta XP (Intensite)": "Apprentissage (XP/j)",
     "Apprentissage (XP/j)": "Apprentissage (XP/j)",
     "Conversion Premium": "Taux Abonn. Super",

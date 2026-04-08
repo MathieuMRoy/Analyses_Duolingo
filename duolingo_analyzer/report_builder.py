@@ -31,9 +31,8 @@ from .financial_signals import build_financial_signal_sheet_df
 from .quarterly_nowcast import build_quarterly_nowcast_raw_df
 from .reporting.sheets.dcf_valuation_sheet import render_dcf_valuation_sheet
 from .reporting.sheets.alternative_data_sheet import render_alternative_data_sheet
-from .reporting.sheets.briefing_ai_sheet import render_briefing_ai_sheet
 from .reporting.sheets.financial_nowcast_sheet import render_financial_nowcast_sheet
-from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df
+from .reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
 from .reporting.sheets.monthly_trends_sheet import add_monthly_trends_chart, build_monthly_trends_frames
 from .reporting.sheets.quarterly_nowcast_sheet import render_quarterly_nowcast_sheet
 from .reporting.sheets.summary_sheet import build_summary_today_df, merge_summary_history
@@ -246,19 +245,8 @@ def sauvegarder_rapport_excel(
                 continue
 
             if sheet_name == GLOSSAIRE_SHEET:
-                render_briefing_ai_sheet(
-                    ws,
-                    wb,
-                    GLOSSAIRE_RAW_SHEET,
-                    style_ctx,
-                    render_helpers,
-                    ia_report=ia_report,
-                    signal_package=financial_signals,
-                    quarterly_nowcast=quarterly_nowcast,
-                    alternative_data=alternative_data,
-                    dcf_valuation=dcf_valuation,
-                )
-                ws.freeze_panes = "A5"
+                render_kpi_dictionary_sheet(ws, wb, GLOSSAIRE_RAW_SHEET, style_ctx)
+                ws.freeze_panes = "A12"
                 continue
 
             if sheet_name == TRENDS_SHEET:

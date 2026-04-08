@@ -1,6 +1,6 @@
 # Architecture du projet
 
-Ce repo produit un classeur Duolingo orienté investisseur à partir de données quotidiennes, de signaux trimestriels et de quelques sources externes.
+Ce repo produit un classeur Duolingo oriente investisseur a partir de donnees quotidiennes, de signaux trimestriels et de quelques sources externes.
 
 ## Pipeline quotidien
 
@@ -9,22 +9,22 @@ Ce repo produit un classeur Duolingo orienté investisseur à partir de données
 2. `duolingo_analyzer/report_builder.py`
    - reconstruit le workbook principal `rapport_historique.xlsx`
 3. `scripts_utilitaires/build_historique.py`
-   - reconstruit la version historique consolidée
+   - reconstruit la version historique consolidee
 4. `scripts_utilitaires/google_drive_sync.py`
-   - récupère/pousse les fichiers persistés dans Google Drive
+   - recupere et pousse les fichiers persistes dans Google Drive
 
-## Où vit la logique métier
+## Ou vit la logique metier
 
 - `duolingo_analyzer/financial_signals.py`
   - signaux quotidiens du panel
 - `duolingo_analyzer/quarterly_nowcast.py`
-  - agrégation trimestrielle, probabilités, estimations
+  - agregation trimestrielle, probabilites, estimations
 - `duolingo_analyzer/alternative_data.py`
   - signaux externes quotidiens et historique WoW
 - `duolingo_analyzer/valuation_dcf.py`
-  - hypothèses et calculs de valorisation DCF
+  - hypotheses et calculs de valorisation DCF
 
-## Où vit le rendu Excel
+## Ou vit le rendu Excel
 
 - `duolingo_analyzer/reporting/sheets/summary_sheet.py`
   - onglet `Suivi Quotidien`
@@ -41,50 +41,35 @@ Ce repo produit un classeur Duolingo orienté investisseur à partir de données
 - `duolingo_analyzer/reporting/sheets/kpi_dictionary_sheet.py`
   - onglet `Dictionnaire des KPIs`
 
-## Helpers partagés
+## Helpers partages
 
 - `duolingo_analyzer/columns.py`
-  - noms des feuilles, aliases de colonnes, constantes partagées
+  - noms des feuilles, aliases de colonnes, constantes partagees
 - `duolingo_analyzer/reporting/styles.py`
   - palette, polices, helpers de style
 - `duolingo_analyzer/reporting/render_helpers.py`
-  - helpers textuels passés aux renderers
+  - helpers textuels passes aux renderers
 - `duolingo_analyzer/reporting/workbook_layout.py`
-  - ordre des onglets, feuilles masquées, retrait des onglets legacy
+  - ordre des onglets, feuilles masquees, retrait des onglets legacy
 - `duolingo_analyzer/reporting/workbook_postprocess.py`
-  - opérations workbook génériques
+  - operations workbook generiques
 
-## Couche ADK compagnon
-
-- `duolingo_analyzer/adk/tools.py`
-  - outils read-only pour exposer l'état courant du rapport, du nowcast, de l'alternative data et de la DCF
-- `duolingo_analyzer/adk/agents.py`
-  - agents spécialisés (quotidien, trimestriel, alternative data, valorisation, QA) + superviseur principal
-- `duolingo_analyzer/adk/runner.py`
-  - runner local ADK basé sur `InMemorySessionService`
-- `scripts_utilitaires/run_adk_analyst.py`
-  - point d'entrée simple pour interroger l'agent ADK depuis le repo
-- `duolingo_analyzer/adk/README.md`
-  - mode d'emploi et exemples de prompts
-
-Cette couche ADK n'est pas la source de vérité métier : elle s'appuie sur les fichiers persistés et les modules déterministes existants.
-
-## Fichiers de données persistés
+## Fichiers de donnees persistes
 
 - `daily_streaks_log.csv`
   - historique quotidien principal du panel
 - `target_users.csv`
-  - panel cible à suivre
+  - panel cible a suivre
 - `alternative_data_inputs.csv`
-  - entrées manuelles complémentaires pour l'onglet `Alternative Data`
+  - entrees manuelles complementaires pour l'onglet `Alternative Data`
 - `rapports_donnees/alternative_data_history.csv`
   - historique quotidien des signaux externes
 - `financial_docs/quarterly_labels_template.csv`
-  - labels trimestriels, guidance, réels
+  - labels trimestriels, guidance, reels
 
-## Règle simple pour modifier vite
+## Regle simple pour modifier vite
 
-- besoin de changer un calcul : toucher le module métier correspondant
+- besoin de changer un calcul : toucher le module metier correspondant
 - besoin de changer l'apparence d'un onglet : toucher `reporting/sheets/...`
 - besoin de renommer des feuilles ou harmoniser la structure : toucher `columns.py` et `reporting/workbook_layout.py`
-- besoin de modifier le wording partagé : privilégier `reporting/render_helpers.py` ou le renderer concerné
+- besoin de modifier le wording partage : privilegier `reporting/render_helpers.py` ou le renderer concerne
