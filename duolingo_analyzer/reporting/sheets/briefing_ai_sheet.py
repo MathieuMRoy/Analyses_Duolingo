@@ -154,7 +154,7 @@ def render_briefing_ai_sheet(
         ws.delete_rows(1, ws.max_row)
 
     ws.sheet_view.showGridLines = False
-    ws.freeze_panes = "A24"
+    ws.freeze_panes = "A5"
 
     for column_letter, width in {
         "A": 16,

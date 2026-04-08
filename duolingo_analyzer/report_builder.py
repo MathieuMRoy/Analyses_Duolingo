@@ -258,7 +258,7 @@ def sauvegarder_rapport_excel(
                     alternative_data=alternative_data,
                     dcf_valuation=dcf_valuation,
                 )
-                ws.freeze_panes = "A24"
+                ws.freeze_panes = "A5"
                 continue
 
             if sheet_name == TRENDS_SHEET:
