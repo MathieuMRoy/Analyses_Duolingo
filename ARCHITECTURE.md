@@ -54,6 +54,21 @@ Ce repo produit un classeur Duolingo orienté investisseur à partir de données
 - `duolingo_analyzer/reporting/workbook_postprocess.py`
   - opérations workbook génériques
 
+## Couche ADK compagnon
+
+- `duolingo_analyzer/adk/tools.py`
+  - outils read-only pour exposer l'état courant du rapport, du nowcast, de l'alternative data et de la DCF
+- `duolingo_analyzer/adk/agents.py`
+  - agents spécialisés (quotidien, trimestriel, alternative data, valorisation, QA) + superviseur principal
+- `duolingo_analyzer/adk/runner.py`
+  - runner local ADK basé sur `InMemorySessionService`
+- `scripts_utilitaires/run_adk_analyst.py`
+  - point d'entrée simple pour interroger l'agent ADK depuis le repo
+- `duolingo_analyzer/adk/README.md`
+  - mode d'emploi et exemples de prompts
+
+Cette couche ADK n'est pas la source de vérité métier : elle s'appuie sur les fichiers persistés et les modules déterministes existants.
+
 ## Fichiers de données persistés
 
 - `daily_streaks_log.csv`
