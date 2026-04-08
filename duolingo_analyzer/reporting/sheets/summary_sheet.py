@@ -1,4 +1,4 @@
-"""Helpers pour l'onglet Resume Financier."""
+"""Helpers pour l'onglet Suivi Quotidien."""
 
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ def build_summary_today_df(stats: dict) -> pd.DataFrame:
         [
             {
                 "Date": date_obj or date_jour,
-                "Série Moyenne (Jours)": moyenne_streak_jour,
-                "Évol. vs Veille": delta_streak,
+                "Serie Moyenne (Jours)": moyenne_streak_jour,
+                "Evol. vs Veille": delta_streak,
                 "Apprentissage (XP/j)": round(stats.get("delta_xp_moyen", 0), 0),
                 "Taux Abonn. Super": round(stats["taux_conversion_plus"] / 100, 6)
                 if isinstance(stats.get("taux_conversion_plus"), numbers.Number)
@@ -48,13 +48,14 @@ def merge_summary_history(
     df_today: pd.DataFrame,
     normalize_summary_df,
 ) -> pd.DataFrame:
+    df_today = normalize_summary_df(df_today)
+
     if df_resume is None or df_resume.empty:
         merged = df_today.copy()
     else:
         merged = normalize_summary_df(df_resume)
         if "Date" in merged.columns:
             merged["Date"] = pd.to_datetime(merged["Date"], errors="coerce")
-        df_today = df_today.copy()
         df_today["Date"] = pd.to_datetime(df_today["Date"], errors="coerce")
         date_value = df_today.loc[0, "Date"] if "Date" in df_today.columns else None
         if "Date" in merged.columns and pd.notna(date_value):
@@ -66,4 +67,3 @@ def merge_summary_history(
         merged = merged.sort_values("Date").reset_index(drop=True)
 
     return merged
-
