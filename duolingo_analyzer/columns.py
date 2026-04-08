@@ -1,20 +1,21 @@
 """
-Définitions centralisées des colonnes, noms de feuilles et constantes partagées.
+Shared sheet names, column names, and workbook constants.
 
-Ce module est le point unique pour ajouter, renommer ou supprimer
-une colonne du suivi quotidien ou une feuille Excel.
+This module is the single place to update a visible tab name or a
+daily-tracking column.
 """
 
 import pandas as pd
 
-# ─── Noms de feuilles Excel ──────────────────────────────────────────────────
 
+# Sheet names
 SUMMARY_SHEET = "Suivi Quotidien"
-AI_SHEET = "🤖 Analyse Stratégique"
-GLOSSAIRE_SHEET = "📖 Dictionnaire des KPIs"
+AI_SHEET = "🤖 Analyse Strategique"
+BRIEFING_SHEET = "Briefing IA"
+GLOSSAIRE_SHEET = BRIEFING_SHEET
 GLOSSAIRE_RAW_SHEET = "Dictionnaire des KPIs - Raw"
 TRENDS_SHEET = "📈 Tendances Mensuelles"
-CHART_DATA_SHEET = "📊 Données Graphique"
+CHART_DATA_SHEET = "📊 Donnees Graphique"
 
 SIGNALS_SHEET = "Signaux Financiers"
 SIGNALS_RAW_SHEET = "Signaux Financiers - Raw"
@@ -25,17 +26,21 @@ ALT_DATA_RAW_SHEET = "Alternative Data - Raw"
 DCF_SHEET = "Valorisation DCF"
 
 LEGACY_SHEET_NAMES = {
-    "📊 Résumé Financier Q1",
+    "Resume Financier Q1",
+    "Dictionnaire des KPIs",
+    "Guide des KPIs",
+    "📊 Resume Financier Q1",
+    "📖 Dictionnaire des KPIs",
 }
 
 BAD_SHEET_NAMES = {
-    'ðŸ“Š RÃ©sumÃ© Financier Q1',
-    'ðŸ¤– Analyse StratÃ©gique',
-    'ðŸ“Š DonnÃ©es Graphique',
+    "Ã°Å¸â€œÅ  RÃƒÂ©sumÃƒÂ© Financier Q1",
+    "Ã°Å¸Â¤â€“ Analyse StratÃƒÂ©gique",
+    "Ã°Å¸â€œÅ  DonnÃƒÂ©es Graphique",
 }
 
-# ─── Colonnes du suivi quotidien ─────────────────────────────────────────────
 
+# Daily summary columns
 SUMMARY_COLUMNS = [
     "Date",
     "Série Moyenne (Jours)",
@@ -58,10 +63,13 @@ PERCENT_COLUMNS = {
 SUMMARY_COLUMN_ALIASES = {
     "Date": "Date",
     "Moyenne Streak (J)": "Série Moyenne (Jours)",
+    "Serie Moyenne (Jours)": "Série Moyenne (Jours)",
     "Série Moyenne (Jours)": "Série Moyenne (Jours)",
-    "Évolution vs Hier": "Évol. vs Veille",
+    "Evolution vs Hier": "Évol. vs Veille",
+    "Evol. vs Veille": "Évol. vs Veille",
     "Évol. vs Veille": "Évol. vs Veille",
-    "Delta XP (Intensité)": "Apprentissage (XP/j)",
+    "Évolution vs Hier": "Évol. vs Veille",
+    "Delta XP (Intensite)": "Apprentissage (XP/j)",
     "Apprentissage (XP/j)": "Apprentissage (XP/j)",
     "Conversion Premium": "Taux Abonn. Super",
     "Taux Abonn. Super": "Taux Abonn. Super",
@@ -71,6 +79,7 @@ SUMMARY_COLUMN_ALIASES = {
     "Taux d'Attrition Global": "Taux d'Abandon Global",
     "Abandons vs Veille": "Abandons vs Veille",
     "Reactivations vs Veille": "Reactivations vs Veille",
+    "Score Sante Global": "Score d'Engagement",
     "Score Santé Global": "Score d'Engagement",
     "Score d'Engagement": "Score d'Engagement",
     "Total Profils": "Panel Total",

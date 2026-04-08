@@ -7,7 +7,9 @@ from openpyxl import load_workbook
 
 from duolingo_analyzer.config import REPORT_DIR
 from duolingo_analyzer.excel_dashboard import refresh_trends_dashboard
-from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df, render_kpi_dictionary_sheet
+from duolingo_analyzer.reporting.render_helpers import build_render_helpers
+from duolingo_analyzer.reporting.sheets.briefing_ai_sheet import render_briefing_ai_sheet
+from duolingo_analyzer.reporting.sheets.kpi_dictionary_sheet import build_kpi_dictionary_df
 from duolingo_analyzer.reporting.workbook_layout import apply_standard_workbook_layout
 from duolingo_analyzer.reporting.styles import build_style_context
 from duolingo_analyzer.columns import (
@@ -72,7 +74,13 @@ def build_historique() -> None:
 
     wb = load_workbook(HISTO_FILE)
     if GLOSSAIRE_SHEET in wb.sheetnames:
-        render_kpi_dictionary_sheet(wb[GLOSSAIRE_SHEET], wb, GLOSSAIRE_RAW_SHEET, build_style_context())
+        render_briefing_ai_sheet(
+            wb[GLOSSAIRE_SHEET],
+            wb,
+            GLOSSAIRE_RAW_SHEET,
+            build_style_context(),
+            build_render_helpers(),
+        )
     apply_standard_workbook_layout(
         wb,
         include_dcf=DCF_SHEET in wb.sheetnames,
