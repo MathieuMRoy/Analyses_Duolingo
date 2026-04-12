@@ -14,6 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 FILES_TO_SYNC = {
     "target_users.csv": BASE_DIR / "target_users.csv",
+    "missing_target_users.csv": BASE_DIR / "rapports_donnees" / "missing_target_users.csv",
     "daily_streaks_log.csv": BASE_DIR / "daily_streaks_log.csv",
     "alternative_data_inputs.csv": BASE_DIR / "alternative_data_inputs.csv",
     "alternative_data_history.csv": BASE_DIR / "rapports_donnees" / "alternative_data_history.csv",

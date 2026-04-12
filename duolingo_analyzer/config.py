@@ -28,6 +28,7 @@ DAILY_LOG_FILE = BASE_DIR / "daily_streaks_log.csv"
 ALTERNATIVE_DATA_INPUT_FILE = BASE_DIR / "alternative_data_inputs.csv"
 APP_TIMEZONE = ZoneInfo("America/Toronto")
 DAILY_LOG_RETENTION_DAYS = int(os.getenv("DAILY_LOG_RETENTION_DAYS", "120"))
+DISCOVERY_ACTIVE_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_ACTIVE_LOOKBACK_DAYS", "7"))
 
 
 def now_toronto() -> datetime:
@@ -39,6 +40,7 @@ DAILY_RAPPORT_EXCEL_FILE = REPORT_DIR / f"rapport_{date_str}.xlsx"
 # Fichier unique qui s'enrichit chaque jour (historique)
 RAPPORT_EXCEL_FILE = REPORT_DIR / "rapport_historique.xlsx"
 ALTERNATIVE_DATA_HISTORY_FILE = REPORT_DIR / "alternative_data_history.csv"
+MISSING_TARGET_USERS_FILE = REPORT_DIR / "missing_target_users.csv"
 
 # ─── Constantes et Clés API ─────────────────────────────────────────────────
 CEO_USERNAME = "luis"

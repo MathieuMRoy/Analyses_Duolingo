@@ -25,9 +25,12 @@ from .config import (
     DUOLINGO_JWT,
     REPORT_DIR,
     BASE_DIR,
+    DISCOVERY_ACTIVE_LOOKBACK_DAYS,
+    now_toronto,
 )
 
 NODES_EXPLORES_FILE = BASE_DIR / "explored_nodes.json"
+TARGET_USER_COLUMNS = ["Username", "Cohort", "UserId", "TotalXP"]
 
 # Noms d'utilisateurs réels ayant de vastes réseaux d'abonnés
 SEED_USERNAMES = [
@@ -155,9 +158,7 @@ def _verifier_activite_profil(user_id, date_limite: str) -> str | None:
             streak_length = streak_data.get("length", 0)
             
             # STRICT FILTER: Streak active (Date récente + Longueur > 0)
-            limite_active = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
-            
-            if last_date and last_date >= limite_active and streak_length > 0:
+            if last_date and last_date >= date_limite and streak_length > 0:
                 return u_data.get("username")
         elif res.status_code in (403, 429):
             print(f"  🛑 [{user_id}] Rate limit détecté (Status {res.status_code}). Pause 60s...")
@@ -174,6 +175,39 @@ def _determiner_cohorte(total_xp: int) -> str:
         return "Standard"
     else:
         return "Super-Actifs"
+
+
+def _normalize_target_user_record(row: dict | None) -> dict | None:
+    """Normalise une ligne target_users tout en conservant UserId et TotalXP."""
+    if not row:
+        return None
+
+    username = str(row.get("Username") or row.get("username") or "").strip()
+    if not username:
+        return None
+
+    user_id_raw = row.get("UserId", row.get("id", ""))
+    total_xp_raw = row.get("TotalXP", row.get("totalXp", 0))
+
+    try:
+        user_id = int(float(user_id_raw)) if str(user_id_raw).strip() else ""
+    except (TypeError, ValueError):
+        user_id = ""
+
+    try:
+        total_xp = int(float(total_xp_raw)) if str(total_xp_raw).strip() else 0
+    except (TypeError, ValueError):
+        total_xp = 0
+
+    cohort = str(row.get("Cohort") or "").strip() or _determiner_cohorte(total_xp)
+
+    return {
+        "Username": username,
+        "Cohort": cohort,
+        "UserId": user_id,
+        "TotalXP": total_xp,
+    }
+
 
 def _sauvegarder_progressif(utilisateurs_session: list[dict]):
     """
@@ -200,22 +234,26 @@ def _sauvegarder_progressif(utilisateurs_session: list[dict]):
     
     # On commence par le disque (source de vérité pour ce qui doit rester)
     for u in utilisateurs_disk:
-        name = str(u.get("Username", "")).strip()
-        name_lower = name.lower()
+        normalized = _normalize_target_user_record(u)
+        if not normalized:
+            continue
+        name_lower = normalized["Username"].lower()
         if name_lower and name_lower not in vu:
-            fusion.append({"Username": name, "Cohort": u.get("Cohort", "Standard")})
+            fusion.append(normalized)
             vu.add(name_lower)
             
     # On ajoute les trouvailles de cette session (si pas déjà là)
     for u in utilisateurs_session:
-        name = str(u.get("Username", "")).strip()
-        name_lower = name.lower()
+        normalized = _normalize_target_user_record(u)
+        if not normalized:
+            continue
+        name_lower = normalized["Username"].lower()
         if name_lower and name_lower not in vu:
-            fusion.append({"Username": name, "Cohort": u.get("Cohort", "Standard")})
+            fusion.append(normalized)
             vu.add(name_lower)
     # 3. Écriture robuste
     try:
-        df = pd.DataFrame(fusion)
+        df = pd.DataFrame(fusion, columns=TARGET_USER_COLUMNS)
         df.to_csv(TARGET_USERS_FILE, index=False)
         # Flush OS
         if hasattr(os, 'sync'):
@@ -279,7 +317,12 @@ def initialiser_cibles() -> list[str]:
             if seed not in seen_usernames:
                 total_xp = profil.get("totalXp", 0) or 0
                 cohorte = _determiner_cohorte(total_xp)
-                utilisateurs_session.append({"Username": profil.get("username", seed), "Cohort": cohorte})
+                utilisateurs_session.append({
+                    "Username": profil.get("username", seed),
+                    "Cohort": cohorte,
+                    "UserId": uid,
+                    "TotalXP": total_xp,
+                })
                 seen_usernames.add(seed)
                 total_uniques += 1
     
@@ -290,7 +333,7 @@ def initialiser_cibles() -> list[str]:
     vague = 1
     queue_index = 0
     Derive_IDs = list(id_queue) # Copie pour éviter de boucler sur ce qu'on ajoute
-    date_limite = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    date_limite = (now_toronto() - timedelta(days=DISCOVERY_ACTIVE_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
 
     print(f"\n  🚀 Phase 2 — Nuclear Brute Force (Vitesse Maximale)")
     
@@ -312,7 +355,12 @@ def initialiser_cibles() -> list[str]:
                 if username and username not in seen_usernames:
                     item = futures[future]
                     cohorte = _determiner_cohorte(item["totalXp"])
-                    utilisateurs_session.append({"Username": username, "Cohort": cohorte})
+                    utilisateurs_session.append({
+                        "Username": username,
+                        "Cohort": cohorte,
+                        "UserId": item.get("id", ""),
+                        "TotalXP": item.get("totalXp", 0),
+                    })
                     seen_usernames.add(username)
                     total_uniques += 1
                     
