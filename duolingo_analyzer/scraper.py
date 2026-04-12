@@ -20,6 +20,11 @@ from .config import (
     DAILY_LOG_RETENTION_DAYS,
     DUOLINGO_PROFILE_API,
     MISSING_TARGET_USERS_FILE,
+    SCRAPER_COOLDOWN_DELAY_MAX,
+    SCRAPER_COOLDOWN_DELAY_MIN,
+    SCRAPER_MAX_WORKERS,
+    SCRAPER_START_DELAY_MAX,
+    SCRAPER_START_DELAY_MIN,
     SESSION,
     now_toronto,
 )
@@ -287,15 +292,23 @@ def collecter_streaks_quotidiens(utilisateurs_cibles: list[dict]) -> str:
     lock = threading.Lock()
     missing_state = _load_missing_state()
     stats = {"succes": 0, "erreurs": 0, "rescues_by_id": 0}
-    max_workers = 12
+    max_workers = max(1, int(SCRAPER_MAX_WORKERS))
+
+    print(
+        f"  Mode rapide : {max_workers} workers | "
+        f"start_delay={SCRAPER_START_DELAY_MIN:.2f}-{SCRAPER_START_DELAY_MAX:.2f}s | "
+        f"cooldown={SCRAPER_COOLDOWN_DELAY_MIN:.2f}-{SCRAPER_COOLDOWN_DELAY_MAX:.2f}s"
+    )
 
     def _worker_task(cible: dict, index: int) -> None:
         user = str(cible.get("Username") or "").strip()
         cohorte = cible.get("Cohort", "")
 
-        time.sleep(random.uniform(0, 5))
+        if SCRAPER_START_DELAY_MAX > 0:
+            time.sleep(random.uniform(SCRAPER_START_DELAY_MIN, SCRAPER_START_DELAY_MAX))
         data, lookup_mode, reason = _resolve_target_profile(cible)
-        time.sleep(random.uniform(1.0, 2.5))
+        if SCRAPER_COOLDOWN_DELAY_MAX > 0:
+            time.sleep(random.uniform(SCRAPER_COOLDOWN_DELAY_MIN, SCRAPER_COOLDOWN_DELAY_MAX))
 
         with lock:
             if data:
