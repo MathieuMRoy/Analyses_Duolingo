@@ -3,8 +3,7 @@
 on:
   workflow_dispatch:
   schedule:
-    - cron: "7 14 * 3-10 *"
-    - cron: "7 15 * 1,2,11,12 *"
+    - cron: "37 14 * * *"
 
 concurrency:
   group: duolingo-daily-report
