@@ -1,7 +1,7 @@
 {
   "metadata": {
     "phase": "phase_2_quarterly_nowcast_v1",
-    "as_of_date": "2026-03-21",
+    "as_of_date": "2026-05-06",
     "current_quarter": "2026Q1",
     "default_selected_quarter": "2026Q1",
     "available_quarters": [
@@ -15,7 +15,7 @@
     "quarter": "2026Q1",
     "quarter_start": "2026-03-15",
     "quarter_end_observed": "2026-03-16",
-    "earnings_release_date": null,
+    "earnings_release_date": "2026-05-04",
     "observed_days": 2,
     "avg_coverage_ratio": 0.180284,
     "latest_coverage_ratio": 0.355651,
@@ -41,9 +41,14 @@
     "guidance_raise_probability_proxy": 0.4126,
     "revenue_guidance_reference_musd": 288.5,
     "revenue_guidance_reference_quarter": "2025Q4",
-    "estimated_revenue_musd": 294.11,
-    "estimated_ebitda_musd": 79.03,
-    "estimated_next_q_guidance_musd": 308.26,
+    "estimated_revenue_musd": 293.92,
+    "revenue_estimation_basis": "guidance_management",
+    "estimated_ebitda_musd": 79.34,
+    "estimated_net_income_musd": 43.48,
+    "estimated_eps": 0.875,
+    "diluted_shares_reference_m": 49.7,
+    "ebitda_to_net_income_ratio": 0.5525,
+    "estimated_next_q_guidance_musd": 304.38,
     "main_drivers": [
       "Le trimestre reste encore trop jeune pour faire émerger un moteur dominant."
     ],
@@ -53,9 +58,28 @@
       "La couverture du panel limite encore la fiabilité du signal."
     ],
     "model_summary_text": "",
+    "confidence_context_text": "",
     "snapshot_as_of_date": null,
     "snapshot_locked": false,
-    "snapshot_status_label": "En cours"
+    "snapshot_status_label": "En cours",
+    "actual_revenue_musd": 292.0,
+    "consensus_revenue_musd": null,
+    "revenue_surprise_pct": null,
+    "actual_eps": 0.89,
+    "consensus_eps": null,
+    "eps_surprise_pct": null,
+    "actual_adjusted_ebitda_musd": 83.4,
+    "consensus_adjusted_ebitda_musd": null,
+    "actual_paid_subscribers_m": 12.5,
+    "consensus_paid_subscribers_m": null,
+    "actual_subscription_revenue_musd": 250.908,
+    "consensus_subscription_revenue_musd": null,
+    "guidance_next_q_revenue_musd": 295.5,
+    "guidance_fy_revenue_musd": 1205.0,
+    "guidance_signal": "Maintained",
+    "source_actuals": "Q1FY26 Duolingo 3-31-26 Shareholder Letter vF.pdf",
+    "source_consensus": null,
+    "notes": "Auto-extracted from shareholder letter | guidance stored as midpoint of published range"
   },
   "model_output": {
     "quarter_signal_bias": "Defavorable",
@@ -66,13 +90,16 @@
     "revenue_beat_probability": 0.3918,
     "revenue_beat_probability_proxy": 0.3918,
     "revenue_beat_guidance_probability": 0.3918,
-    "estimated_revenue_musd": 294.11,
+    "estimated_revenue_musd": 293.92,
     "ebitda_beat_probability_proxy": 0.4433,
     "ebitda_beat_probability": 0.4433,
-    "estimated_ebitda_musd": 79.03,
+    "estimated_ebitda_musd": 79.34,
+    "estimated_net_income_musd": 43.48,
+    "estimated_eps": 0.875,
+    "diluted_shares_reference_m": 49.7,
     "guidance_raise_probability_proxy": 0.4126,
     "guidance_raise_probability": 0.4126,
-    "estimated_next_q_guidance_musd": 308.26,
+    "estimated_next_q_guidance_musd": 304.38,
     "main_drivers": [
       "Le trimestre reste encore trop jeune pour faire émerger un moteur dominant."
     ],
@@ -80,11 +107,12 @@
       "Le momentum de monétisation demeure sous la zone neutre.",
       "La dynamique Super sur 14 jours ralentit.",
       "La couverture du panel limite encore la fiabilité du signal."
-    ]
+    ],
+    "confidence_context_text": "Confiance faible : le trimestre reste encore jeune (2 jours de nowcast observes) meme si la couverture moyenne atteint 18,0%. Le guidance revenus (288,5 M$) donne deja un point de comparaison exploitable, et le signal peut encore bouger jusqu'a la cloture du trimestre."
   },
   "labels_readiness": {
-    "actual_labels_ready": 8,
-    "guidance_benchmarks_ready": 7,
+    "actual_labels_ready": 9,
+    "guidance_benchmarks_ready": 8,
     "supervised_ready": true,
     "next_step": "Completer d'abord l'historique de guidance management, puis ajouter ensuite le consensus analystes comme couche de comparaison marche."
   },
@@ -93,7 +121,7 @@
       "quarter": "2026Q1",
       "quarter_start": "2026-03-15",
       "quarter_end_observed": "2026-03-16",
-      "earnings_release_date": null,
+      "earnings_release_date": "2026-05-04",
       "observed_days": 2,
       "avg_coverage_ratio": 0.180284,
       "latest_coverage_ratio": 0.355651,
@@ -119,9 +147,14 @@
       "guidance_raise_probability_proxy": 0.4126,
       "revenue_guidance_reference_musd": 288.5,
       "revenue_guidance_reference_quarter": "2025Q4",
-      "estimated_revenue_musd": 294.11,
-      "estimated_ebitda_musd": 79.03,
-      "estimated_next_q_guidance_musd": 308.26,
+      "estimated_revenue_musd": 293.92,
+      "revenue_estimation_basis": "guidance_management",
+      "estimated_ebitda_musd": 79.34,
+      "estimated_net_income_musd": 43.48,
+      "estimated_eps": 0.875,
+      "diluted_shares_reference_m": 49.7,
+      "ebitda_to_net_income_ratio": 0.5525,
+      "estimated_next_q_guidance_musd": 304.38,
       "main_drivers": [
         "Le trimestre reste encore trop jeune pour faire émerger un moteur dominant."
       ],
@@ -131,9 +164,28 @@
         "La couverture du panel limite encore la fiabilité du signal."
       ],
       "model_summary_text": "",
+      "confidence_context_text": "",
       "snapshot_as_of_date": null,
       "snapshot_locked": false,
-      "snapshot_status_label": "En cours"
+      "snapshot_status_label": "En cours",
+      "actual_revenue_musd": 292.0,
+      "consensus_revenue_musd": null,
+      "revenue_surprise_pct": null,
+      "actual_eps": 0.89,
+      "consensus_eps": null,
+      "eps_surprise_pct": null,
+      "actual_adjusted_ebitda_musd": 83.4,
+      "consensus_adjusted_ebitda_musd": null,
+      "actual_paid_subscribers_m": 12.5,
+      "consensus_paid_subscribers_m": null,
+      "actual_subscription_revenue_musd": 250.908,
+      "consensus_subscription_revenue_musd": null,
+      "guidance_next_q_revenue_musd": 295.5,
+      "guidance_fy_revenue_musd": 1205.0,
+      "guidance_signal": "Maintained",
+      "source_actuals": "Q1FY26 Duolingo 3-31-26 Shareholder Letter vF.pdf",
+      "source_consensus": null,
+      "notes": "Auto-extracted from shareholder letter | guidance stored as midpoint of published range"
     }
   ],
   "assumptions": [

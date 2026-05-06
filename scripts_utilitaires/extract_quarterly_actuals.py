@@ -61,6 +61,12 @@ QUARTER_SPECS = [
         "earnings_release_date": "2026-02-26",
         "shareholder_letter": "Q4FY25 Duolingo 12-31-25 Shareholder Letter (1).pdf",
     },
+    {
+        "quarter": "2026Q1",
+        "calendar_quarter_end": "2026-03-31",
+        "earnings_release_date": "2026-05-04",
+        "shareholder_letter": "Q1FY26 Duolingo 3-31-26 Shareholder Letter vF.pdf",
+    },
 ]
 
 
@@ -80,6 +86,14 @@ def _head_lines(text: str, max_lines: int = 260) -> list[str]:
 
 def _clean_number(value: str) -> float:
     return float(value.replace(",", "").replace("$", ""))
+
+
+def _normalize_money_musd(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if abs(value) >= 10_000:
+        return round(value / 1000.0, 3)
+    return value
 
 
 def _extract_second_number_from_line(lines: list[str], keywords: tuple[str, ...]) -> float | None:
@@ -209,6 +223,7 @@ def _extract_guidance_signal(text: str) -> str | None:
 def _extract_metrics_for_letter(path: Path) -> dict[str, object]:
     text = _read_pdf_text(path)
     lines = _head_lines(text)
+    all_lines = _normalized_lines(text)
     is_q4_fy_letter = "Q4 / FY" in text[:1000]
 
     actual_revenue = _extract_single_money_after_phrase(
@@ -244,17 +259,23 @@ def _extract_metrics_for_letter(path: Path) -> dict[str, object]:
         else:
             actual_adjusted_ebitda = _extract_second_number_from_line(lines, ("adjusted ebitda",))
 
-    actual_subscription_revenue = _extract_quarter_value_from_multi_period_line(lines, ("subscription $",))
+    actual_subscription_revenue = _extract_quarter_value_from_multi_period_line(all_lines, ("subscription $",))
     if actual_subscription_revenue is None:
         actual_subscription_revenue = _extract_quarter_value_from_multi_period_line(
-            lines,
+            all_lines,
             ("subscription revenues $",),
         )
     if actual_subscription_revenue is None:
-        actual_subscription_revenue = _extract_second_number_from_line(lines, ("subscription revenues",))
+        actual_subscription_revenue = _extract_second_number_from_line(all_lines, ("subscription revenues",))
+
+    actual_revenue = _normalize_money_musd(actual_revenue)
+    actual_adjusted_ebitda = _normalize_money_musd(actual_adjusted_ebitda)
+    actual_subscription_revenue = _normalize_money_musd(actual_subscription_revenue)
 
     actual_eps = _extract_actual_eps(text)
     guidance_next_q_revenue, guidance_fy_revenue = _extract_guidance_midpoints(text, "Revenues")
+    if guidance_next_q_revenue is None and guidance_fy_revenue is None:
+        guidance_next_q_revenue, guidance_fy_revenue = _extract_guidance_midpoints(text, "Revenue")
     _, _ = _extract_guidance_midpoints(text, "Bookings")
     guidance_signal = _extract_guidance_signal(text)
 

@@ -66,6 +66,14 @@ def _round_or_none(value: float | None, digits: int = 4) -> float | None:
     return round(float(value), digits)
 
 
+def _money_to_musd(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if abs(value) >= 10_000:
+        return float(value) / 1000.0
+    return float(value)
+
+
 def _fetch_current_share_price() -> dict[str, object]:
     try:
         response = requests.get(
@@ -195,9 +203,23 @@ def _extract_two_matches(text: str, pattern: str) -> tuple[float | None, float |
     return values[0], values[1]
 
 
+def _extract_latest_match(text: str, pattern: str) -> float | None:
+    first, second = _extract_two_matches(text, pattern)
+    return second if second is not None else first
+
+
+def _financial_context_pdf_sort_key(path: Path) -> tuple[bool, float, str]:
+    name = path.name.lower()
+    return ("shareholder letter" in name, path.stat().st_mtime, path.name)
+
+
 def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
     docs_dir = BASE_DIR / "financial_docs"
-    candidates = sorted(docs_dir.glob("*.pdf"), key=lambda p: p.name, reverse=True) if docs_dir.exists() else []
+    candidates = (
+        sorted(docs_dir.glob("*.pdf"), key=_financial_context_pdf_sort_key, reverse=True)
+        if docs_dir.exists()
+        else []
+    )
     
     for path in candidates:
         text = _extract_pdf_text(path)
@@ -210,56 +232,64 @@ def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
         )
 
         if cash_musd is None:
-            cash_kusd, _ = _extract_two_matches(
+            cash_kusd = _extract_latest_match(
                 text,
-                r"Cash and cash equivalents\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+(\d+(?:,\d{3})*(?:\.\d+)?)",
+                r"Cash and cash equivalents[\s\.]*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
             )
             if cash_kusd is not None:
                 cash_musd = cash_kusd / 1000.0
 
         if short_term_investments_musd is None:
-            short_kusd, _ = _extract_two_matches(
+            short_kusd = _extract_latest_match(
                 text,
-                r"Short-term investments\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+(\d+(?:,\d{3})*(?:\.\d+)?)",
+                r"Short-term investments[\s\.]*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
             )
             if short_kusd is not None:
                 short_term_investments_musd = short_kusd / 1000.0
 
-        operating_cash_flow_kusd, _ = _extract_two_matches(
+        operating_cash_flow_kusd = _extract_latest_match(
             text,
             r"Net cash provided by operating activities(?: \(GAAP\))?\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
         )
-        free_cash_flow_kusd, _ = _extract_two_matches(
+        free_cash_flow_kusd = _extract_latest_match(
             text,
-            r"Free cash flow.*?\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
+            r"(?:^|\n)Free cash flow\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
         )
-        cap_software_kusd, _ = _extract_two_matches(
+        cap_software_kusd = _extract_latest_match(
             text,
-            r"Capitalized software development costs and purchases of intangible assets\s*\((\d+(?:,\d{3})*(?:\.\d+)?)\)\s+\((\d+(?:,\d{3})*(?:\.\d+)?)\)",
+            r"Capitalized software development costs and purchases of intangible\s+assets\s*\((\d+(?:,\d{3})*(?:\.\d+)?)\)\s+\((\d+(?:,\d{3})*(?:\.\d+)?)\)",
         )
-        capex_kusd, _ = _extract_two_matches(
+        capex_kusd = _extract_latest_match(
             text,
             r"Purchases of property and equipment\s*\((\d+(?:,\d{3})*(?:\.\d+)?)\)\s+\((\d+(?:,\d{3})*(?:\.\d+)?)\)",
         )
-        net_income_kusd, _ = _extract_two_matches(
+        net_income_kusd = _extract_latest_match(
             text,
-            r"Net income \(GAAP\).*?\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
+            r"(?:^|\n)Net income(?: \(GAAP\))?\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
         )
-        stock_based_compensation_kusd, _ = _extract_two_matches(
+        stock_based_compensation_kusd = _extract_latest_match(
             text,
             r"(?:Stock|Share)-based compensation expense\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
         )
-        diluted_eps = _extract_first_match(
+        diluted_eps = _extract_latest_match(
             text,
-            r"Net income per share attributable.*?diluted\s*\$?\s*(\d+(?:\.\d+)?)",
+            r"Net income per share attributable.*?diluted\s*\$?(\d+(?:\.\d+)?)\s+\$?(\d+(?:\.\d+)?)",
         )
-        adjusted_ebitda_kusd, _ = _extract_two_matches(
+        adjusted_ebitda_kusd = _extract_latest_match(
             text,
-            r"Adjusted EBITDA\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
+            r"(?:^|\n)Adjusted EBITDA\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s+\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)",
         )
 
-        diluted_shares_m = None
-        if net_income_kusd and diluted_eps and diluted_eps > 0:
+        diluted_shares_m = _extract_first_match(
+            text,
+            r"Fully diluted shares outstanding ended the quarter at approximately\s+(\d+(?:\.\d+)?)\s+million",
+        )
+        if diluted_shares_m is None:
+            diluted_shares_m = _extract_first_match(
+                text,
+                r"Total estimated diluted shares outstanding\s+(\d+(?:\.\d+)?)",
+            )
+        if diluted_shares_m is None and net_income_kusd and diluted_eps and diluted_eps > 0:
             diluted_shares_m = net_income_kusd / diluted_eps / 1000.0
         if diluted_shares_m is None:
             diluted_shares_m = _extract_first_match(
@@ -272,27 +302,40 @@ def _extract_latest_balance_and_cashflow_context() -> dict[str, object]:
                 r"weighted average(?: number of)? diluted shares(?: outstanding)?\s*\.{0,}\s*(\d+(?:\.\d+)?)",
             )
 
+        if all(
+            value is None
+            for value in [
+                cash_musd,
+                short_term_investments_musd,
+                operating_cash_flow_kusd,
+                free_cash_flow_kusd,
+                net_income_kusd,
+                adjusted_ebitda_kusd,
+            ]
+        ):
+            continue
+
         return {
             "source_file": path.name,
             "cash_musd": _round_or_none(cash_musd, 1),
             "short_term_investments_musd": _round_or_none(short_term_investments_musd, 1),
-            "operating_cash_flow_musd": _round_or_none((operating_cash_flow_kusd or 0) / 1000.0, 1)
+            "operating_cash_flow_musd": _round_or_none(_money_to_musd(operating_cash_flow_kusd), 1)
             if operating_cash_flow_kusd is not None
             else None,
             "capitalized_software_musd": _round_or_none((cap_software_kusd or 0) / 1000.0, 1)
             if cap_software_kusd is not None
             else None,
             "capex_musd": _round_or_none((capex_kusd or 0) / 1000.0, 1) if capex_kusd is not None else None,
-            "free_cash_flow_musd": _round_or_none((free_cash_flow_kusd or 0) / 1000.0, 1)
+            "free_cash_flow_musd": _round_or_none(_money_to_musd(free_cash_flow_kusd), 1)
             if free_cash_flow_kusd is not None
             else None,
-            "net_income_musd": _round_or_none((net_income_kusd or 0) / 1000.0, 1)
+            "net_income_musd": _round_or_none(_money_to_musd(net_income_kusd), 1)
             if net_income_kusd is not None
             else None,
-            "adjusted_ebitda_musd": _round_or_none((adjusted_ebitda_kusd or 0) / 1000.0, 1)
+            "adjusted_ebitda_musd": _round_or_none(_money_to_musd(adjusted_ebitda_kusd), 1)
             if adjusted_ebitda_kusd is not None
             else None,
-            "stock_based_compensation_musd": _round_or_none((stock_based_compensation_kusd or 0) / 1000.0, 1)
+            "stock_based_compensation_musd": _round_or_none(_money_to_musd(stock_based_compensation_kusd), 1)
             if stock_based_compensation_kusd is not None
             else None,
             "diluted_shares_m": _round_or_none(diluted_shares_m, 3),
@@ -440,8 +483,13 @@ def build_dcf_valuation_package(
     wacc = 0.1058
     terminal_growth = 0.03
 
-    estimated_revenue_musd = _safe_float(current_snapshot.get("estimated_revenue_musd"))
-    estimated_ebitda_musd = _safe_float(current_snapshot.get("estimated_ebitda_musd"))
+    estimated_revenue_musd = _safe_float(current_snapshot.get("actual_revenue_musd"))
+    if estimated_revenue_musd is None:
+        estimated_revenue_musd = _safe_float(current_snapshot.get("estimated_revenue_musd"))
+
+    estimated_ebitda_musd = _safe_float(current_snapshot.get("actual_adjusted_ebitda_musd"))
+    if estimated_ebitda_musd is None:
+        estimated_ebitda_musd = _safe_float(current_snapshot.get("estimated_ebitda_musd"))
     market_context = _fetch_current_share_price()
     current_share_price = _safe_float(market_context.get("current_price"))
 
@@ -449,7 +497,7 @@ def build_dcf_valuation_package(
         "metadata": {
             "as_of_date": reference_date or quarterly_nowcast.get("metadata", {}).get("as_of_date"),
             "quarter": current_quarter,
-            "source": "quarterly_nowcast + quarterly_labels_template + latest annual filing",
+            "source": "quarterly_nowcast + quarterly_labels_template + latest financial filing",
             "source_file": balance_context.get("source_file"),
         },
         "assumptions": {

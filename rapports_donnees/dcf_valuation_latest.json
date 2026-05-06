@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "as_of_date": null,
+    "as_of_date": "2026-05-06",
     "quarter": "2026Q1",
-    "source": "quarterly_nowcast + quarterly_labels_template + latest annual filing",
-    "source_file": "0001628280-26-012494.pdf"
+    "source": "quarterly_nowcast + quarterly_labels_template + latest financial filing",
+    "source_file": "Q1FY26 Duolingo 3-31-26 Shareholder Letter vF.pdf"
   },
   "assumptions": {
     "growth_rate": 0.1652,
@@ -11,29 +11,35 @@
     "terminal_growth": 0.03
   },
   "anchors": {
-    "estimated_revenue_current_quarter_musd": null,
-    "estimated_ebitda_current_quarter_musd": null,
+    "estimated_revenue_current_quarter_musd": 292.0,
+    "estimated_ebitda_current_quarter_musd": 83.4,
     "next_q_guidance_reference_musd": 288.5,
     "fy_guidance_revenue_musd": 1209.0,
-    "revenue_ttm_estimated_musd": 1037.6,
-    "ebitda_ttm_estimated_musd": 305.8,
-    "operating_cash_flow_musd": 387.8,
-    "capitalized_software_musd": 9.3,
-    "capex_musd": 18.1,
-    "free_cash_flow_historical_musd": 0.1,
-    "stock_based_compensation_musd": 137.4,
-    "free_cash_flow_base_musd": 0.1,
-    "free_cash_flow_base_less_sbc_musd": 0.0,
-    "fcf_margin_base": 0.0001,
-    "cash_musd": 1036.4,
-    "short_term_investments_musd": 104.1,
-    "cash_and_investments_musd": 1140.5,
+    "revenue_ttm_estimated_musd": 1098.9,
+    "ebitda_ttm_estimated_musd": 326.4,
+    "operating_cash_flow_musd": 150.8,
+    "capitalized_software_musd": 2.9,
+    "capex_musd": 0.1,
+    "free_cash_flow_historical_musd": 147.8,
+    "stock_based_compensation_musd": 34.6,
+    "free_cash_flow_base_musd": 156.5,
+    "free_cash_flow_base_less_sbc_musd": 121.9,
+    "fcf_margin_base": 0.1424,
+    "cash_musd": 1138.6,
+    "short_term_investments_musd": 113.0,
+    "cash_and_investments_musd": 1251.6,
     "total_debt_musd": 0.0,
-    "net_cash_musd": 1140.5,
-    "diluted_shares_m": 48.316,
+    "net_cash_musd": 1251.6,
+    "diluted_shares_m": 49.7,
     "previous_year_revenue_musd": 1037.6,
     "previous_year_adjusted_ebitda_musd": 305.8,
     "implied_fy_growth_rate": 0.1652
+  },
+  "market_context": {
+    "current_share_price": 106.27,
+    "market_source": "Yahoo Finance",
+    "market_timestamp": "2026-05-06",
+    "upside_downside_pct": null
   },
   "sensitivity": {
     "wacc_values": [
@@ -51,6 +57,7 @@
     "La base de revenus s'appuie sur les trois derniers trimestres publies et le trimestre en cours estime par le nowcast.",
     "Le FCF de base applique la marge de free cash flow observee sur le dernier exercice annualise disponible.",
     "La croissance annuelle part de la guidance FY du management quand elle est disponible, avec des bornes de prudence.",
+    "Le cours actuel sert uniquement a lire un upside ou downside implicite; la DCF reste une valorisation sous hypotheses.",
     "La valorisation reste une lecture sous hypotheses, a completer par la sensibilite WACC / croissance terminale."
   ]
 }
